@@ -53,7 +53,9 @@ impl Game {
     }
 
     pub async fn game_tick(&self) {
-        println!("Game tick");
+        let lock = self.state.write().await;
+
+        println!("Game tick players: {}", lock.player_count);
     }
 }
 

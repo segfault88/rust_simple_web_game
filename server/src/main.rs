@@ -1,5 +1,4 @@
 use axum::{Router, routing::get};
-use std::sync::Arc;
 use tokio::{net::TcpListener, signal};
 use tokio_util::sync::CancellationToken;
 // use crate::game::Game;
@@ -45,11 +44,7 @@ async fn main() {
                 let handle = handle.clone();
                 move || async move {
                     let player_id = handle.add_player().await;
-                    format!(
-                        "Hello, World! player id: {}, total players: {}",
-                        player_id,
-                        handle.player_count().await
-                    )
+                    format!("Hello, World! player id: {}", player_id)
                 }
             }),
         )
