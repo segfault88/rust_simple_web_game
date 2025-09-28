@@ -1,4 +1,4 @@
-use axum::{routing::get, Router};
+use axum::{Router, routing::get};
 use std::sync::Arc;
 use tokio::{net::TcpListener, signal};
 use tokio_util::sync::CancellationToken;
@@ -29,13 +29,40 @@ async fn main() {
 
     let port = std::env::var("PORT").unwrap_or_else(|_| "8888".to_string());
 
-    let game = Arc::new(Game::new());
-    let cancel_clone = cancel.clone();
-    tokio::spawn(async move {
-        game.clone().run(cancel_clone).await;
+    let (game, handle) = Game::new();
+
+    tokio::spawn({
+        let cancel = cancel.clone();
+        async move {
+            game.start(cancel).await;
+        }
     });
 
-    let app = Router::new().route("/", get(|| async { "Hello, World!" }));
+    let app = Router::new()
+        .route(
+            "/",
+            get({
+                let handle = handle.clone();
+                move || async move {
+                    let player_id = handle.add_player().await;
+                    format!(
+                        "Hello, World! player id: {}, total players: {}",
+                        player_id,
+                        handle.player_count().await
+                    )
+                }
+            }),
+        )
+        .route(
+            "/count",
+            get({
+                let handle = handle.clone();
+                move || async move {
+                    let count = handle.player_count().await;
+                    format!("count {}", count)
+                }
+            }),
+        );
 
     let listener = TcpListener::bind(format!("0.0.0.0:{}", port))
         .await
