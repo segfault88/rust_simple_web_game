@@ -692,6 +692,7 @@ dependencies = [
  "axum",
  "serde",
  "serde_cbor",
+ "shared",
  "tokio",
  "tokio-util",
  "tracing",
