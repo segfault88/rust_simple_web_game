@@ -1,6 +1,7 @@
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use tokio_util::sync::CancellationToken;
+use tracing::info;
 
 #[derive(Debug)]
 pub struct GameState {
@@ -37,12 +38,12 @@ impl Game {
     }
 
     pub async fn start(&self, cancel_token: CancellationToken) {
-        println!("Game loop starting");
+        info!("Game loop starting");
 
         loop {
             tokio::select! {
                 _ = cancel_token.cancelled() => {
-                    println!("Game loop canceled");
+                    info!("Game loop canceled");
                     break
                 }
                 _ = tokio::time::sleep(tokio::time::Duration::from_millis(1000)) => {
@@ -55,7 +56,7 @@ impl Game {
     pub async fn game_tick(&self) {
         let lock = self.state.write().await;
 
-        println!("Game tick players: {}", lock.player_count);
+        info!(lock.player_count, "tick");
     }
 }
 

@@ -1,6 +1,8 @@
 use axum::{Router, routing::get};
 use tokio::net::TcpListener;
 use tokio_util::sync::CancellationToken;
+use tracing::{Level, info};
+use tracing_subscriber::FmtSubscriber;
 
 mod game;
 mod shutdown;
@@ -8,6 +10,15 @@ mod shutdown;
 #[tokio::main]
 async fn main() {
     let cancel = CancellationToken::new();
+
+    let subscriber = FmtSubscriber::builder()
+        // all spans/events with a level higher than TRACE (e.g, debug, info, warn, etc.)
+        // will be written to stdout.
+        .with_max_level(Level::TRACE)
+        // completes the builder.
+        .finish();
+
+    tracing::subscriber::set_global_default(subscriber).expect("setting default subscriber failed");
 
     let port = std::env::var("PORT").unwrap_or_else(|_| "8888".to_string());
 
@@ -46,12 +57,12 @@ async fn main() {
         .await
         .unwrap();
 
-    println!("Listening on {}", listener.local_addr().unwrap());
+    info!("Listening on {}", listener.local_addr().unwrap());
 
     axum::serve(listener, app)
         .with_graceful_shutdown(shutdown::shutdown_signal(cancel.clone()))
         .await
         .unwrap();
 
-    println!("Server shutdown");
+    info!("Server shutdown");
 }
