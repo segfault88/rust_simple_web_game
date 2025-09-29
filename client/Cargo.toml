@@ -1,0 +1,15 @@
+[package]
+name = "client"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+shared = { path = "../shared" }
+js-sys = "0.3.81"
+serde = "1.0.228"
+serde_cbor = "0.11.2"
+wasm-bindgen = "0.2.104"
+wasm-bindgen-futures = "0.4.54"

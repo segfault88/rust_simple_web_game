@@ -1,5 +1,5 @@
 
 [workspace]
 resolver = "3"
-members = ["server","shared"]
+members = ["client","server","shared"]
 default-members = ["server"]
