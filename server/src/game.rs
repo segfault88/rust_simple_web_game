@@ -3,7 +3,7 @@ use tokio::sync::RwLock;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender, unbounded_channel};
 use tokio::time::{Duration, interval};
 use tokio_util::sync::CancellationToken;
-use tracing::{info, debug};
+use tracing::{info};
 
 const TICKS_PER_SECOND: u64 = 1;
 
