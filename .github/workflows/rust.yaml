@@ -1,0 +1,59 @@
+name: Rust CI
+
+on:
+  # Trigger the workflow on push events to the 'develop' branch only
+  push:
+    branches:
+      - develop
+
+# A workflow run is made up of one or more jobs.
+jobs:
+  check_and_lint:
+    name: Check and Lint on ${{ matrix.toolchain }} (${{ runner.os }})
+    # Run on the latest Ubuntu runner, which is standard for CI
+    runs-on: ubuntu-latest
+
+    # Use a matrix for the Rust toolchain (starting with stable)
+    strategy:
+      matrix:
+        toolchain: [stable] # You can add 'beta', 'nightly' later if needed
+
+    steps:
+      - name: Checkout Repository
+        # Action to pull the repository code
+        uses: actions/checkout@v4
+
+      # --- 1. Dependency Caching Setup ---
+      - name: Cache Cargo Dependencies
+        uses: actions/cache@v4
+        with:
+          # Caches the registry index, downloaded crates, and compiled output from 'target'
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          # The key invalidates the cache when the OS, Rust toolchain, or Cargo.lock file changes.
+          key: ${{ runner.os }}-${{ matrix.toolchain }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          # Restore keys allow retrieving a cache even if Cargo.lock has changed (useful for minor dependency changes)
+          restore-keys: |
+            ${{ runner.os }}-${{ matrix.toolchain }}-cargo-
+            ${{ runner.os }}-cargo-
+
+      # --- 2. Setup Rust Toolchain ---
+      - name: Install Rust Toolchain and Components
+        # We use dtolnay/rust-toolchain for a modern, fast setup
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: ${{ matrix.toolchain }}
+          # Ensure clippy is available for the linting step
+          components: clippy
+
+      # --- 3. Cargo Check ---
+      # Runs the compiler without producing an executable, checking for errors quickly.
+      - name: Run Cargo Check
+        run: cargo check --all-features
+
+      # --- 4. Cargo Clippy ---
+      # Runs the linter. The `-- -D warnings` flag treats all linter warnings as a build failure.
+      - name: Run Cargo Clippy (Treat Warnings as Errors)
+        run: cargo clippy --all-targets --all-features -- -D warnings
