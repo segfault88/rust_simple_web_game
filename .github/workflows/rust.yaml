@@ -1,15 +1,17 @@
 name: Rust CI
 
 on:
-  # Trigger the workflow on push events to the 'develop' branch only
+  # Trigger the workflow on push events to the 'main' branch only
   push:
     branches:
-      - develop
+      - main
 
 # A workflow run is made up of one or more jobs.
 jobs:
   check_and_lint:
-    name: Check and Lint on ${{ matrix.toolchain }} (${{ runner.os }})
+    # FIX: Removed the reference to runner.os from the job name,
+    # as the 'runner' context is not fully initialized or accessible at this parsing stage.
+    name: Check and Lint on ${{ matrix.toolchain }} (Ubuntu)
     # Run on the latest Ubuntu runner, which is standard for CI
     runs-on: ubuntu-latest
 
@@ -33,6 +35,7 @@ jobs:
             ~/.cargo/git
             target
           # The key invalidates the cache when the OS, Rust toolchain, or Cargo.lock file changes.
+          # NOTE: runner.os is fine here because it's used inside the 'with' block of an action step.
           key: ${{ runner.os }}-${{ matrix.toolchain }}-cargo-${{ hashFiles('**/Cargo.lock') }}
           # Restore keys allow retrieving a cache even if Cargo.lock has changed (useful for minor dependency changes)
           restore-keys: |
