@@ -1,5 +1,15 @@
 use wasm_bindgen::prelude::*;
 
+macro_rules! console_log {
+    ($($t:tt)*) => (log(&format_args!($($t)*).to_string()))
+}
+
+#[wasm_bindgen]
+extern "C" {
+    #[wasm_bindgen(js_namespace = console)]
+    fn log(s: &str);
+}
+
 #[wasm_bindgen]
 pub fn start_game() -> Result<(), JsValue> {
     Ok(())
@@ -7,6 +17,8 @@ pub fn start_game() -> Result<(), JsValue> {
 
 #[wasm_bindgen(start)]
 fn run() {
+    console_log!("hello, from rust");
+
     let document = web_sys::window().expect("no global `window` exists").document().expect("should have a document on window");
     let canvas = document.get_element_by_id("canvas").unwrap();
     let canvas: web_sys::HtmlCanvasElement = canvas
