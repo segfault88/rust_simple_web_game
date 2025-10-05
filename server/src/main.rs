@@ -1,8 +1,8 @@
-use axum::{Router, routing::get};
+use axum::{routing::get, Router};
 use tokio::net::TcpListener;
 use tokio_util::sync::CancellationToken;
 use tower_http::services::ServeDir;
-use tracing::{Level, info};
+use tracing::{info, Level};
 use tracing_subscriber::FmtSubscriber;
 
 mod game;

@@ -11,12 +11,22 @@
             padding: 20px;
             background-color: #f0f0f0;
         }
+
+        canvas {
+            background-color: lightblue;
+            width: 500px;
+            height: 500px;
+        }
     </style>
 </head>
 
 <body>
     <div class="container">
         <h1>Rust Simple Web Game</h1>
+
+        <canvas id="canvas" style="">
+
+        </canvas>
 
         <script type="module">
             import init from './pkg/client.js';
