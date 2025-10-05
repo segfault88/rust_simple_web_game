@@ -124,7 +124,7 @@ pub fn start_game() -> Result<(), JsValue> {
 
 #[wasm_bindgen(start)]
 fn run() {
-    console_log!("Starting game client...");
+    console_log!("starting game client...");
 
     let client = Rc::new(RefCell::new(
         GameClient::new().expect("Failed to create GameClient"),
@@ -148,4 +148,6 @@ fn run() {
 
     // Start the animation loop
     request_animation_frame(g.borrow().as_ref().unwrap());
+
+    console_log!("startup done");
 }
