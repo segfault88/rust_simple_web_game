@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <title>Rust Simple Web Game</title>
@@ -12,16 +13,18 @@
         }
     </style>
 </head>
+
 <body>
-<div class="container">
-    <h1>Rust Simple Web Game</h1>
+    <div class="container">
+        <h1>Rust Simple Web Game</h1>
 
-    <script type="module">
-        import init from './pkg/client.js';
+        <script type="module">
+            import init from './pkg/client.js';
 
-        await init();
-        console.log('WASM initialized');
-    </script>
-</div>
+            await init();
+            console.log('WASM initialized');
+        </script>
+    </div>
 </body>
+
 </html>

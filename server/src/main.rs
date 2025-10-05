@@ -1,6 +1,7 @@
 use axum::{Router, routing::get};
 use tokio::net::TcpListener;
 use tokio_util::sync::CancellationToken;
+use tower_http::services::ServeDir;
 use tracing::{Level, info};
 use tracing_subscriber::FmtSubscriber;
 
@@ -31,17 +32,19 @@ async fn main() {
         }
     });
 
+    let client_assets_path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("static");
+
     let app = Router::new()
-        .route(
-            "/",
-            get({
-                let handle = handle.clone();
-                move || async move {
-                    let player_id = handle.add_player().await;
-                    format!("Hello, World! player id: {}", player_id)
-                }
-            }),
-        )
+        // .route(
+        //     "/",
+        //     get({
+        //         let handle = handle.clone();
+        //         move || async move {
+        //             let player_id = handle.add_player().await;
+        //             format!("Hello, World! player id: {}", player_id)
+        //         }
+        //     }),
+        // )
         .route(
             "/count",
             get({
@@ -51,7 +54,8 @@ async fn main() {
                     format!("count {}", count)
                 }
             }),
-        );
+        )
+        .fallback_service(ServeDir::new(client_assets_path));
 
     let listener = TcpListener::bind(format!("0.0.0.0:{}", port))
         .await
