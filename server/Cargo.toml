@@ -13,3 +13,6 @@ tokio-util = { version = "0.7.16", features = ["full"] }
 tracing = { version = "0.1.41", features = ["log"] }
 tracing-subscriber = "0.3.20"
 tower-http = { version = "0.6.6", features = ["fs"] }
+axum-extra = { version = "0.10.3", features = ["typed-header"] }
+futures-util = { version = "0.3.31", features = ["sink"] }
+headers = "0.4.1"

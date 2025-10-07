@@ -1,8 +1,21 @@
-use axum::{routing::get, Router};
+use axum::{
+    Router,
+    body::Bytes,
+    extract::{
+        connect_info::ConnectInfo,
+        ws::{CloseFrame, Message, Utf8Bytes, WebSocket, WebSocketUpgrade},
+    },
+    response::IntoResponse,
+    routing::{any, get},
+};
+use axum_extra::TypedHeader;
+use futures_util::SinkExt;
+use futures_util::StreamExt;
+use std::net::SocketAddr;
 use tokio::net::TcpListener;
 use tokio_util::sync::CancellationToken;
 use tower_http::services::ServeDir;
-use tracing::{info, Level};
+use tracing::{Level, error, info};
 use tracing_subscriber::FmtSubscriber;
 
 mod game;
@@ -35,16 +48,7 @@ async fn main() {
     let client_assets_path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("static");
 
     let app = Router::new()
-        // .route(
-        //     "/",
-        //     get({
-        //         let handle = handle.clone();
-        //         move || async move {
-        //             let player_id = handle.add_player().await;
-        //             format!("Hello, World! player id: {}", player_id)
-        //         }
-        //     }),
-        // )
+        .route("/ws", any(ws_handler))
         .route(
             "/count",
             get({
@@ -63,10 +67,54 @@ async fn main() {
 
     info!("Listening on {}", listener.local_addr().unwrap());
 
-    axum::serve(listener, app)
-        .with_graceful_shutdown(shutdown::shutdown_signal(cancel.clone()))
-        .await
-        .unwrap();
+    axum::serve(
+        listener,
+        app.into_make_service_with_connect_info::<SocketAddr>(),
+    )
+    .with_graceful_shutdown(shutdown::shutdown_signal(cancel.clone()))
+    .await
+    .unwrap();
 
     info!("Server shutdown");
+}
+
+async fn ws_handler(
+    ws: WebSocketUpgrade,
+    user_agent: Option<TypedHeader<headers::UserAgent>>,
+    ConnectInfo(addr): ConnectInfo<SocketAddr>,
+) -> impl IntoResponse {
+    let user_agent = if let Some(TypedHeader(user_agent)) = user_agent {
+        user_agent.to_string()
+    } else {
+        String::from("Unknown browser")
+    };
+    println!("`{user_agent}` at {addr} connected.");
+    // finalize the upgrade process by returning upgrade callback.
+    // we can customize the callback by sending additional info such as address.
+    ws.on_upgrade(move |socket| handle_socket(socket, addr))
+}
+
+async fn handle_socket(mut socket: WebSocket, who: SocketAddr) {
+    let (mut sender, mut receiver) = socket.split();
+
+    tokio::spawn(async move {
+        loop {
+            let send = sender.send(Message::Ping(Bytes::from_static(&[]))).await;
+            match send {
+                Ok(_) => info!("send ping ok"),
+                Err(err) => {
+                    error!("send ping failed {:?}", err);
+                    break;
+                }
+            }
+
+            tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+        }
+    });
+
+    tokio::spawn(async move {
+        while let Some(Ok(msg)) = receiver.next().await {
+            info!("got message {:?}", msg)
+        }
+    });
 }
