@@ -64,62 +64,109 @@ impl GameClient {
         })
     }
 
+    /// WebSocket event handlers as methods
+    fn on_websocket_open(&mut self, _event: web_sys::Event) {
+        console_log!("WebSocket connection opened");
+        self.state = GameState::Running;
+    }
+
+    fn on_websocket_message(&mut self, event: MessageEvent) {
+        console_log!("WebSocket message received: {:?}", event.data());
+        // TODO: Parse and handle game messages here
+        // For example:
+        // if let Ok(text) = event.data().dyn_into::<js_sys::JsString>() {
+        //     let message = text.as_string().unwrap();
+        //     // Handle the message...
+        // }
+    }
+
+    fn on_websocket_close(&mut self, event: CloseEvent) {
+        console_log!(
+            "WebSocket connection closed: code={}, reason={}",
+            event.code(),
+            event.reason()
+        );
+        self.state = GameState::Disconnected;
+        self.websocket = None;
+    }
+
+    fn on_websocket_error(&mut self, event: ErrorEvent) {
+        console_log!("WebSocket error occurred: {:?}", event);
+        self.state = GameState::Disconnected;
+    }
+
     /// Connect to the WebSocket server
-    fn connect_websocket(&mut self) -> Result<(), JsValue> {
-        if self.websocket.is_some() {
-            return Ok(()); // Already connected or connecting
-        }
+    /// Takes an Rc<RefCell<GameClient>> so callbacks can mutate the client
+    fn connect_websocket(client_ref: Rc<RefCell<GameClient>>) -> Result<(), JsValue> {
+        let ws_url = {
+            let client = client_ref.borrow();
+            if client.websocket.is_some() {
+                return Ok(()); // Already connected or connecting
+            }
 
-        self.state = GameState::Connecting;
-
-        // build wss url
-        let location = self.window.location();
-        let protocol = if location.protocol()? == "https:" {
-            "wss:"
-        } else {
-            "ws:"
+            // build ws url
+            let location = client.window.location();
+            let protocol = if location.protocol()? == "https:" {
+                "wss:"
+            } else {
+                "ws:"
+            };
+            let host = location.host()?;
+            format!("{}//{}/ws", protocol, host)
         };
-        let host = location.host()?;
-        let ws_url = format!("{}//{}//ws", protocol, host);
 
         console_log!("connecting ws: {}", ws_url);
 
         let ws = WebSocket::new(&ws_url)?;
 
-        // Set up event handlers, coppied from sample :|
-        let onopen_callback = Closure::wrap(Box::new(move |_event: web_sys::Event| {
-            console_log!("WebSocket connection opened");
-        }) as Box<dyn FnMut(web_sys::Event)>);
-        ws.set_onopen(Some(onopen_callback.as_ref().unchecked_ref()));
-        onopen_callback.forget(); // Keep the closure alive
+        // Set up event handlers that can mutate the GameClient
+        {
+            let client_clone = client_ref.clone();
+            let onopen_callback = Closure::wrap(Box::new(move |event: web_sys::Event| {
+                client_clone.borrow_mut().on_websocket_open(event);
+            }) as Box<dyn FnMut(web_sys::Event)>);
+            ws.set_onopen(Some(onopen_callback.as_ref().unchecked_ref()));
+            onopen_callback.forget();
+        }
 
-        let onmessage_callback = Closure::wrap(Box::new(move |event: MessageEvent| {
-            console_log!("WebSocket message received: {:?}", event.data());
-        }) as Box<dyn FnMut(MessageEvent)>);
-        ws.set_onmessage(Some(onmessage_callback.as_ref().unchecked_ref()));
-        onmessage_callback.forget(); // Keep the closure alive
+        {
+            let client_clone = client_ref.clone();
+            let onmessage_callback = Closure::wrap(Box::new(move |event: MessageEvent| {
+                client_clone.borrow_mut().on_websocket_message(event);
+            }) as Box<dyn FnMut(MessageEvent)>);
+            ws.set_onmessage(Some(onmessage_callback.as_ref().unchecked_ref()));
+            onmessage_callback.forget();
+        }
 
-        let onclose_callback = Closure::wrap(Box::new(move |event: CloseEvent| {
-            console_log!(
-                "WebSocket connection closed: code={}, reason={}",
-                event.code(),
-                event.reason()
-            );
-        }) as Box<dyn FnMut(CloseEvent)>);
-        ws.set_onclose(Some(onclose_callback.as_ref().unchecked_ref()));
-        onclose_callback.forget(); // Keep the closure alive
+        {
+            let client_clone = client_ref.clone();
+            let onclose_callback = Closure::wrap(Box::new(move |event: CloseEvent| {
+                client_clone.borrow_mut().on_websocket_close(event);
+            }) as Box<dyn FnMut(CloseEvent)>);
+            ws.set_onclose(Some(onclose_callback.as_ref().unchecked_ref()));
+            onclose_callback.forget();
+        }
 
-        let onerror_callback = Closure::wrap(Box::new(move |event: ErrorEvent| {
-            console_log!("WebSocket error occurred: {:?}", event);
-        }) as Box<dyn FnMut(ErrorEvent)>);
-        ws.set_onerror(Some(onerror_callback.as_ref().unchecked_ref()));
-        onerror_callback.forget(); // Keep the closure alive
+        {
+            let client_clone = client_ref.clone();
+            let onerror_callback = Closure::wrap(Box::new(move |event: ErrorEvent| {
+                client_clone.borrow_mut().on_websocket_error(event);
+            }) as Box<dyn FnMut(ErrorEvent)>);
+            ws.set_onerror(Some(onerror_callback.as_ref().unchecked_ref()));
+            onerror_callback.forget();
+        }
 
-        self.websocket = Some(ws);
+        // Set the connection state and store the websocket
+        {
+            let mut client = client_ref.borrow_mut();
+            client.state = GameState::Connecting;
+            client.websocket = Some(ws);
+        }
+
         Ok(())
     }
 
-    /// Update game state (called each frame)
+    /// Send a message through the WebSocket\n    fn send_message(&self, message: &str) -> Result<(), JsValue> {\n        if let Some(ref ws) = self.websocket {\n            if ws.ready_state() == WebSocket::OPEN {\n                ws.send_with_str(message)?;\n                console_log!(\"Sent WebSocket message: {}\", message);\n            } else {\n                console_log!(\"WebSocket not open, cannot send message\");\n            }\n        }\n        Ok(())\n    }\n\n    /// Update game state (called each frame)
     fn update(&mut self) {
         self.frame_count += 1;
 
@@ -182,10 +229,7 @@ fn run() {
     ));
 
     // Connect to WebSocket
-    client
-        .borrow_mut()
-        .connect_websocket()
-        .expect("Failed to connect to WebSocket");
+    GameClient::connect_websocket(client.clone()).expect("Failed to connect to WebSocket");
 
     // Create the animation loop closure
     let f = Rc::new(RefCell::new(None));
