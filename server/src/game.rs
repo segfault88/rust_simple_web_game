@@ -3,14 +3,14 @@ use tokio::sync::RwLock;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender, unbounded_channel};
 use tokio::time::{Duration, interval};
 use tokio_util::sync::CancellationToken;
-use tracing::{info};
+use tracing::info;
 
 const TICKS_PER_SECOND: u64 = 1;
 
 #[derive(Debug)]
 pub struct GameState {
-    player_count: u16,
-    next_player_id: u16,
+    player_count: shared::PlayerId,
+    next_player_id: shared::PlayerId,
     send: UnboundedSender<GameAction>,
     receive: UnboundedReceiver<GameAction>,
 }
@@ -29,7 +29,7 @@ impl GameState {
 }
 
 enum GameAction {
-    Join { player_id: u16 },
+    Join { player_id: shared::PlayerId },
 }
 
 pub struct Game {
@@ -93,18 +93,18 @@ pub struct GameHandle {
 }
 
 impl GameHandle {
-    pub async fn player_count(&self) -> u16 {
+    pub async fn player_count(&self) -> shared::PlayerId {
         let lock = self.state.read().await;
         lock.player_count
     }
 
-    pub async fn add_player(&self) -> u16 {
+    pub async fn add_player(&self) -> shared::PlayerId {
         let mut lock = self.state.write().await;
         lock.player_count += 1;
         let player_id = lock.next_player_id;
         lock.next_player_id += 1;
 
-        lock.send.send(GameAction::Join {player_id}).unwrap();
+        lock.send.send(GameAction::Join { player_id }).unwrap();
 
         player_id
     }
