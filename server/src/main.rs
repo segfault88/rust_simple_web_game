@@ -3,7 +3,7 @@ use axum::{
     body::Bytes,
     extract::{
         connect_info::ConnectInfo,
-        ws::{CloseFrame, Message, Utf8Bytes, WebSocket, WebSocketUpgrade},
+        ws::{Message, WebSocket, WebSocketUpgrade},
     },
     response::IntoResponse,
     routing::{any, get},
@@ -48,7 +48,13 @@ async fn main() {
     let client_assets_path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("static");
 
     let app = Router::new()
-        .route("/ws", any(ws_handler))
+        .route(
+            "/ws",
+            any({
+                let handle = handle.clone();
+                move |ws, user_agent, addr| ws_handler(ws, user_agent, addr, handle.clone())
+            }),
+        )
         .route(
             "/count",
             get({
@@ -82,6 +88,7 @@ async fn ws_handler(
     ws: WebSocketUpgrade,
     user_agent: Option<TypedHeader<headers::UserAgent>>,
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
+    handle: std::sync::Arc<game::GameHandle>,
 ) -> impl IntoResponse {
     let user_agent = if let Some(TypedHeader(user_agent)) = user_agent {
         user_agent.to_string()
@@ -91,10 +98,18 @@ async fn ws_handler(
     info!("agent: `{user_agent}` at {addr} connected.");
     // finalize the upgrade process by returning upgrade callback.
     // we can customize the callback by sending additional info such as address.
-    ws.on_upgrade(move |socket| handle_socket(socket, addr))
+    ws.on_upgrade(move |socket| handle_socket(socket, addr, handle))
 }
 
-async fn handle_socket(mut socket: WebSocket, who: SocketAddr) {
+async fn handle_socket(
+    socket: WebSocket,
+    who: SocketAddr,
+    handle: std::sync::Arc<game::GameHandle>,
+) {
+    // Register player with the game
+    let player_id = handle.add_player().await;
+    info!("player {} connected from {}", player_id, who);
+
     let (mut sender, mut receiver) = socket.split();
 
     tokio::spawn(async move {
@@ -114,7 +129,7 @@ async fn handle_socket(mut socket: WebSocket, who: SocketAddr) {
 
     tokio::spawn(async move {
         while let Some(Ok(msg)) = receiver.next().await {
-            info!("got message {:?}", msg)
+            info!("player {} got message {:?}", player_id, msg)
         }
     });
 }
