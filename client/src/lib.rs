@@ -24,7 +24,7 @@ enum GameState {
     Running,
 }
 
-/// The main game client that manages state and rendering
+// The main game client that manages state and rendering
 struct GameClient {
     window: Window,
     canvas: HtmlCanvasElement,
@@ -35,7 +35,7 @@ struct GameClient {
 }
 
 impl GameClient {
-    /// Create a new GameClient instance
+    // Create a new GameClient instance
     fn new() -> Result<Self, JsValue> {
         let window = web_sys::window().expect("no global `window` exists");
 
@@ -64,7 +64,7 @@ impl GameClient {
         })
     }
 
-    /// WebSocket event handlers as methods
+    // WebSocket event handlers as methods
     fn on_websocket_open(&mut self, _event: web_sys::Event) {
         console_log!("WebSocket connection opened");
         self.state = GameState::Running;
@@ -95,8 +95,8 @@ impl GameClient {
         self.state = GameState::Disconnected;
     }
 
-    /// Connect to the WebSocket server
-    /// Takes an Rc<RefCell<GameClient>> so callbacks can mutate the client
+    // Connect to the WebSocket server
+    // Takes an Rc<RefCell<GameClient>> so callbacks can mutate the client
     fn connect_websocket(client_ref: Rc<RefCell<GameClient>>) -> Result<(), JsValue> {
         let ws_url = {
             let client = client_ref.borrow();
@@ -166,7 +166,20 @@ impl GameClient {
         Ok(())
     }
 
-    /// Send a message through the WebSocket\n    fn send_message(&self, message: &str) -> Result<(), JsValue> {\n        if let Some(ref ws) = self.websocket {\n            if ws.ready_state() == WebSocket::OPEN {\n                ws.send_with_str(message)?;\n                console_log!(\"Sent WebSocket message: {}\", message);\n            } else {\n                console_log!(\"WebSocket not open, cannot send message\");\n            }\n        }\n        Ok(())\n    }\n\n    /// Update game state (called each frame)
+    // Send a message through the WebSocket
+    fn _send_message(&self, message: &str) -> Result<(), JsValue> {
+        if let Some(ref ws) = self.websocket {
+            if ws.ready_state() == WebSocket::OPEN {
+                ws.send_with_str(message)?;
+                console_log!("Sent WebSocket message: {}", message);
+            } else {
+                console_log!("WebSocket not open, cannot send message");
+            }
+        }
+        Ok(())
+    }
+
+    // Update game state (called each frame)
     fn update(&mut self) {
         self.frame_count += 1;
 
@@ -188,7 +201,7 @@ impl GameClient {
         }
     }
 
-    /// Render the current game state
+    // Render the current game state
     fn render(&self) {
         let width = self.canvas.width() as f64;
         let height = self.canvas.height() as f64;
@@ -206,7 +219,7 @@ impl GameClient {
     }
 }
 
-/// Request the next animation frame with the given closure
+// Request the next animation frame with the given closure
 fn request_animation_frame(f: &Closure<dyn FnMut()>) {
     web_sys::window()
         .expect("no global `window` exists")
