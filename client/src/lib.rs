@@ -7,15 +7,7 @@ use web_sys::{
     Window,
 };
 
-macro_rules! console_log {
-    ($($t:tt)*) => (log(&format_args!($($t)*).to_string()))
-}
-
-#[wasm_bindgen]
-extern "C" {
-    #[wasm_bindgen(js_namespace = console)]
-    fn log(s: &str);
-}
+mod console;
 
 #[derive(Debug)]
 enum GameState {
@@ -183,9 +175,9 @@ impl GameClient {
         if let Some(ref ws) = self.ws {
             if ws.ready_state() == WebSocket::OPEN {
                 ws.send_with_str(message)?;
-                console_log!("sent WebSocket message: {}", message);
+                console_log!("sent websocket message: {}", message);
             } else {
-                console_log!("webSocket not open, cannot send message");
+                console_log!("websocket not open, cannot send message");
             }
         }
         Ok(())
