@@ -24,6 +24,13 @@ enum GameState {
     Running,
 }
 
+struct WebSocketCallbacks {
+    _onopen: Closure<dyn FnMut(web_sys::Event)>,
+    _onmessage: Closure<dyn FnMut(MessageEvent)>,
+    _onclose: Closure<dyn FnMut(CloseEvent)>,
+    _onerror: Closure<dyn FnMut(ErrorEvent)>,
+}
+
 // The main game client that manages state and rendering
 struct GameClient {
     window: Window,
@@ -32,6 +39,7 @@ struct GameClient {
     frame_count: u64,
     state: GameState,
     websocket: Option<WebSocket>,
+    _ws_callbacks: Option<WebSocketCallbacks>,
 }
 
 impl GameClient {
@@ -61,6 +69,7 @@ impl GameClient {
             frame_count: 0,
             state: GameState::Disconnected,
             websocket: None,
+            _ws_callbacks: None,
         })
     }
 
@@ -88,6 +97,7 @@ impl GameClient {
         );
         self.state = GameState::Disconnected;
         self.websocket = None;
+        self._ws_callbacks = None;
     }
 
     fn on_websocket_error(&mut self, event: ErrorEvent) {
@@ -119,49 +129,51 @@ impl GameClient {
 
         let ws = WebSocket::new(&ws_url)?;
 
-        // Set up event handlers that can mutate the GameClient
-        {
+        // Create event handler closures
+        let onopen_callback = {
             let client_clone = client_ref.clone();
-            let onopen_callback = Closure::wrap(Box::new(move |event: web_sys::Event| {
+            Closure::wrap(Box::new(move |event: web_sys::Event| {
                 client_clone.borrow_mut().on_websocket_open(event);
-            }) as Box<dyn FnMut(web_sys::Event)>);
-            ws.set_onopen(Some(onopen_callback.as_ref().unchecked_ref()));
-            onopen_callback.forget();
-        }
+            }) as Box<dyn FnMut(web_sys::Event)>)
+        };
 
-        {
+        let onmessage_callback = {
             let client_clone = client_ref.clone();
-            let onmessage_callback = Closure::wrap(Box::new(move |event: MessageEvent| {
+            Closure::wrap(Box::new(move |event: MessageEvent| {
                 client_clone.borrow_mut().on_websocket_message(event);
-            }) as Box<dyn FnMut(MessageEvent)>);
-            ws.set_onmessage(Some(onmessage_callback.as_ref().unchecked_ref()));
-            onmessage_callback.forget();
-        }
+            }) as Box<dyn FnMut(MessageEvent)>)
+        };
 
-        {
+        let onclose_callback = {
             let client_clone = client_ref.clone();
-            let onclose_callback = Closure::wrap(Box::new(move |event: CloseEvent| {
+            Closure::wrap(Box::new(move |event: CloseEvent| {
                 client_clone.borrow_mut().on_websocket_close(event);
-            }) as Box<dyn FnMut(CloseEvent)>);
-            ws.set_onclose(Some(onclose_callback.as_ref().unchecked_ref()));
-            onclose_callback.forget();
-        }
+            }) as Box<dyn FnMut(CloseEvent)>)
+        };
 
-        {
+        let onerror_callback = {
             let client_clone = client_ref.clone();
-            let onerror_callback = Closure::wrap(Box::new(move |event: ErrorEvent| {
+            Closure::wrap(Box::new(move |event: ErrorEvent| {
                 client_clone.borrow_mut().on_websocket_error(event);
-            }) as Box<dyn FnMut(ErrorEvent)>);
-            ws.set_onerror(Some(onerror_callback.as_ref().unchecked_ref()));
-            onerror_callback.forget();
-        }
+            }) as Box<dyn FnMut(ErrorEvent)>)
+        };
 
-        // Set the connection state and store the websocket
-        {
-            let mut client = client_ref.borrow_mut();
-            client.state = GameState::Connecting;
-            client.websocket = Some(ws);
-        }
+        // Set the callbacks on the WebSocket
+        ws.set_onopen(Some(onopen_callback.as_ref().unchecked_ref()));
+        ws.set_onmessage(Some(onmessage_callback.as_ref().unchecked_ref()));
+        ws.set_onclose(Some(onclose_callback.as_ref().unchecked_ref()));
+        ws.set_onerror(Some(onerror_callback.as_ref().unchecked_ref()));
+
+        // Store the websocket, callbacks, and update state
+        let mut client = client_ref.borrow_mut();
+        client.state = GameState::Connecting;
+        client.websocket = Some(ws);
+        client._ws_callbacks = Some(WebSocketCallbacks {
+            _onopen: onopen_callback,
+            _onmessage: onmessage_callback,
+            _onclose: onclose_callback,
+            _onerror: onerror_callback,
+        });
 
         Ok(())
     }
@@ -183,22 +195,7 @@ impl GameClient {
     fn update(&mut self) {
         self.frame_count += 1;
 
-        // Check WebSocket connection state and update game state accordingly
-        if let Some(ref ws) = self.websocket {
-            match ws.ready_state() {
-                WebSocket::CONNECTING => {
-                    self.state = GameState::Connecting;
-                }
-                WebSocket::OPEN => {
-                    self.state = GameState::Running;
-                }
-                WebSocket::CLOSING | WebSocket::CLOSED => {
-                    self.state = GameState::Disconnected;
-                    // Could attempt reconnection here
-                }
-                _ => {}
-            }
-        }
+        // Game logic will go here
     }
 
     // Render the current game state
@@ -225,12 +222,6 @@ fn request_animation_frame(f: &Closure<dyn FnMut()>) {
         .expect("no global `window` exists")
         .request_animation_frame(f.as_ref().unchecked_ref())
         .expect("should register `requestAnimationFrame` OK");
-}
-
-#[wasm_bindgen]
-pub fn start_game() -> Result<(), JsValue> {
-    // not used yet :|
-    Ok(())
 }
 
 #[wasm_bindgen(start)]
