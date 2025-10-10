@@ -114,7 +114,7 @@ async fn handle_socket(
 
     tokio::spawn(async move {
         loop {
-            let send = sender.send(Message::Ping(Bytes::from_static(&[]))).await;
+            let send = sender.send(Message::Ping(Bytes::default())).await;
             match send {
                 Ok(_) => info!("send ping ok"),
                 Err(err) => {
