@@ -8,6 +8,7 @@ User=game
 Group=game
 WorkingDirectory=/home/game/app/out
 ExecStart=/home/game/app/out/server
+Environment="CARGO_MANIFEST_DIR=/home/game/app/out"
 TimeoutStopSec=5s
 LimitNOFILE=1048576
 PrivateTmp=true

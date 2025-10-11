@@ -46,6 +46,7 @@ async fn main() {
     });
 
     let client_assets_path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("static");
+    info!("assets path: {:?}", client_assets_path);
 
     let app = Router::new()
         .route(
