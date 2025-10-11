@@ -56,3 +56,18 @@ jobs:
 
       - name: Run Cargo Clippy (Warnings ok for now)
         run: cargo clippy --all-targets --all-features # -- -D warnings
+
+      - name: Install wasm-pack
+        run: cargo install wasm-pack
+
+      - name: Build client
+        run: |
+          cd client
+          wasm-pack build --target web --release
+          cd ..
+
+      - name: Build server
+        run: |
+          cd server
+          cargo build --release
+          cd ..
