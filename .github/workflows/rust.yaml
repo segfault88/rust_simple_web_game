@@ -25,7 +25,6 @@ jobs:
         # Action to pull the repository code
         uses: actions/checkout@v4
 
-      # --- 1. Dependency Caching Setup ---
       - name: Cache Cargo Dependencies
         uses: actions/cache@v4
         with:
@@ -42,23 +41,20 @@ jobs:
             ${{ runner.os }}-${{ matrix.toolchain }}-cargo-
             ${{ runner.os }}-cargo-
 
-      # --- 2. Setup Rust Toolchain ---
       - name: Install Rust Toolchain and Components
         # We use dtolnay/rust-toolchain for a modern, fast setup
         uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: ${{ matrix.toolchain }}
           # Ensure clippy is available for the linting step
-          components: clippy
+          components: clippy,wasm-pack
+          targets: wasm32-unknown-unknown
 
       - name: Run Cargo Check
         run: cargo check --all-features
 
       - name: Run Cargo Clippy (Warnings ok for now)
         run: cargo clippy --all-targets --all-features # -- -D warnings
-
-      - name: Install wasm-pack
-        run: cargo install wasm-pack
 
       - name: Build client
         run: |
