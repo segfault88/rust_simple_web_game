@@ -2,7 +2,9 @@
 
 ```
 apt update && apt upgrade
-apt install whois fish btop
+apt install whois fish btop vim
+
+update-alternatives --config editor
 
 ufw allow 2222/tcp
 ufw allow 80/tcp
@@ -12,6 +14,7 @@ useradd -m <user>
 mkpasswd -m sha-512 <password>
 
 <user> ALL=(ALL) NOPASSWD: ALL
+game ALL=(ALL) NOPASSWD: /bin/systemctl restart server.service
 
 chsh -s /usr/bin/fish
 
@@ -34,5 +37,6 @@ sudo useradd --system \
 vim /etc/security/pwquality.conf
 dictcheck = 0
 
-
+# game user can run sudo with only this restart command
+sudo /bin/systemctl restart server.service
 ```

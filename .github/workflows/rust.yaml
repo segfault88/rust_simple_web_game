@@ -84,3 +84,12 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           source: "out/*"
           target: app
+
+      - name: Restart server
+        uses: appleboy/ssh-action@v1
+        with:
+          username: game
+          host: ${{ secrets.SSH_HOST }}
+          port: ${{ secrets.SSH_PORT }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: sudo /bin/systemctl restart server.service

@@ -1,0 +1,17 @@
+[Unit]
+Description=Server
+After=network.target network-online.target
+Requires=network-online.target
+
+[Service]
+User=game
+Group=game
+WorkingDirectory=/home/game/app/out
+ExecStart=/home/game/app/out/server
+TimeoutStopSec=5s
+LimitNOFILE=1048576
+PrivateTmp=true
+ProtectSystem=full
+
+[Install]
+WantedBy=multi-user.target
