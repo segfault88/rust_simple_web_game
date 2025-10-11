@@ -13,7 +13,6 @@ mkpasswd -m sha-512 <password>
 
 <user> ALL=(ALL) NOPASSWD: ALL
 
-
 chsh -s /usr/bin/fish
 
 vim /etc/ssh/sshd_config
@@ -23,13 +22,17 @@ Port 2222
 PasswordAuthentication no
 PermitEmptyPasswords no
 
+sudo groupadd --system caddy
+sudo useradd --system \
+    --gid caddy \
+    --create-home \
+    --home-dir /var/lib/caddy \
+    --shell /usr/sbin/nologin \
+    --comment "Caddy web server" \
+    caddy
 
-useradd -m caddy -s /usr/sbin/nologin
+vim /etc/security/pwquality.conf
+dictcheck = 0
 
-
-# This allows non-root users to bind to ports 80 and higher.
-
-sudo sh -c 'echo "net.ipv4.ip_unprivileged_port_start=80" >> /etc/sysctl.d/99-custom-settings.conf'
-sudo sysctl --system | grep unprivileged
 
 ```

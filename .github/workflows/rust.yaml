@@ -59,23 +59,28 @@ jobs:
       - name: Output dir
         run: mkdir -p out/static/pkg
 
-      # - name: Install wasm-pack
-      #   run: cargo install wasm-pack
+      - name: Install wasm-pack
+        run: cargo install wasm-pack
 
-      # - name: Build client
-      #   run: |
-      #     cd client
-      #     wasm-pack build --target web --release
-      #     cp -v index.html ../out/static/
-      #     cp -Rv pkg/* ../out/static/pkg/
-      #     cd ..
+      - name: Build client
+        run: |
+          cd client
+          wasm-pack build --target web --release
+          cp -v index.html ../out/static/
+          cp -Rv pkg/* ../out/static/pkg/
+          cd ..
 
       - name: Build server
         run: |
           cargo build --bin server --release
-          echo xx
-          ls -al target/
-          echo xx
-          ls -al target/release/
-          echo xx
           cp -v target/release/server out/
+
+      - name: Copy to server
+        uses: appleboy/scp-action@v1
+        with:
+          username: game
+          host: ${{ secrets.SSH_HOST }}
+          port: ${{ secrets.SSH_PORT }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          source: "out/*"
+          target: app
