@@ -12,6 +12,7 @@ use axum_extra::TypedHeader;
 use futures_util::SinkExt;
 use futures_util::StreamExt;
 use std::net::SocketAddr;
+use std::path::PathBuf;
 use tokio::net::TcpListener;
 use tokio_util::sync::CancellationToken;
 use tower_http::services::ServeDir;
@@ -45,8 +46,16 @@ async fn main() {
         }
     });
 
-    let client_assets_path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("static");
-    info!("assets path: {:?}", client_assets_path);
+    let client_assets_path: PathBuf = if let Ok(path) = std::env::var("ASSETS_PATH") {
+        // 1. Production/Configured: Use the path from the environment variable
+        PathBuf::from(path)
+    } else {
+        // 2. Local Development Fallback: Assume the 'static' directory is in the crate root
+        // This uses the compile-time path, which only works during 'cargo run'
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("static")
+    };
+
+    info!("set assets path: {:?}", client_assets_path);
 
     let app = Router::new()
         .route(
