@@ -1,17 +1,14 @@
 use axum::extract::ws::{CloseFrame as axCloseFrame, Message as axMessage};
 use axum::{
     Router,
-    body::Bytes,
     extract::{
         connect_info::ConnectInfo,
-        ws::{CloseFrame, Message, WebSocket, WebSocketUpgrade},
+        ws::{WebSocket, WebSocketUpgrade},
     },
     response::IntoResponse,
     routing::{any, get},
 };
 use axum_extra::TypedHeader;
-use futures_util::SinkExt;
-use futures_util::StreamExt;
 use std::net::SocketAddr;
 use std::path::PathBuf;
 use tokio::net::TcpListener;
@@ -176,6 +173,13 @@ async fn handle_socket(
                             "kicked"
                         );
                         break "kicked";
+                    },
+                    Some(game::WsMessage::Spawn(position))=>{
+                        let msg = shared::ClientWsMessage::Spawn(position.clone());
+                        send_or_break!(
+                            axMessage::Binary(msg.to_bytes().into()),
+                            "spawn send"
+                        );
                     }
                 }
             },

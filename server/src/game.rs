@@ -10,6 +10,15 @@ const TICKS_PER_SECOND: u64 = 1;
 
 pub enum WsMessage {
     Kick,
+    Spawn(shared::Position),
+}
+
+#[derive(Debug)]
+struct Player {
+    player_id: shared::PlayerId,
+    state: shared::PlayerState,
+    position: shared::Position,
+    ws_handler: UnboundedSender<WsMessage>,
 }
 
 #[derive(Debug)]
@@ -18,7 +27,7 @@ pub struct GameState {
     next_player_id: shared::PlayerId,
     send: UnboundedSender<GameAction>,
     receive: UnboundedReceiver<GameAction>,
-    ws_handlers: HashMap<shared::PlayerId, UnboundedSender<WsMessage>>,
+    players: HashMap<shared::PlayerId, Player>,
 }
 
 impl GameState {
@@ -30,7 +39,7 @@ impl GameState {
             next_player_id: 1,
             send,
             receive,
-            ws_handlers: HashMap::new(),
+            players: HashMap::new(),
         }
     }
 }
@@ -96,17 +105,41 @@ impl Game {
                     ws_sender,
                 } => {
                     info!(player_id, "completing join");
-                    lock.ws_handlers.insert(player_id, ws_sender);
+                    lock.players.insert(
+                        player_id,
+                        Player {
+                            player_id: player_id,
+                            state: shared::PlayerState::BeforeSpawn,
+                            position: shared::Position::new(player_id),
+                            ws_handler: ws_sender,
+                        },
+                    );
                 }
                 GameAction::Leave { player_id } => {
                     info!(player_id, "completing leave");
-                    lock.ws_handlers.remove(&player_id);
+                    lock.players.remove(&player_id);
                     lock.player_count = lock.player_count.saturating_sub(1);
                 }
             }
         }
 
-        info!(lock.player_count, "tick");
+        for (player_id, player) in lock.players.iter_mut() {
+            match player.state {
+                // only spawn for now
+                shared::PlayerState::BeforeSpawn => {
+                    info!(
+                        "spawning player id: {:?} at: {:?}",
+                        player_id, player.position
+                    );
+                    player.state = shared::PlayerState::Alive;
+                    player
+                        .ws_handler
+                        .send(WsMessage::Spawn(player.position.clone()))
+                        .unwrap(); // todo: remove unwrap
+                }
+                _ => {} // for now do nothing when spawned or dead
+            }
+        }
     }
 }
 

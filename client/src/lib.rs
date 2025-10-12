@@ -33,6 +33,7 @@ struct GameClient {
     ws: Option<WebSocket>,
     ws_callbacks: Option<WebSocketCallbacks>,
     player_id: Option<shared::PlayerId>,
+    position: Option<shared::Position>,
 }
 
 impl GameClient {
@@ -64,6 +65,7 @@ impl GameClient {
             ws: None,
             ws_callbacks: None,
             player_id: None,
+            position: None,
         })
     }
 
@@ -102,6 +104,10 @@ impl GameClient {
             shared::ClientWsMessage::Joined(player_id) => {
                 console_log!("joined game as player {}", player_id);
                 self.player_id = Some(player_id);
+            }
+            shared::ClientWsMessage::Spawn(position) => {
+                console_log!("spawning at {:?}", position);
+                self.position = Some(position);
             }
         }
     }
@@ -235,6 +241,11 @@ impl GameClient {
             self.frame_count
         );
         self.context.fill_text(&text, 50.0, 50.0).unwrap();
+        let position_str = match &(self.position) {
+            None => "at: none".into(),
+            Some(position) => format!("at: x: {}, y: {}", position.x, position.y),
+        };
+        self.context.fill_text(&position_str, 50.0, 75.0).unwrap();
     }
 }
 
