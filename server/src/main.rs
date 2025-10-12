@@ -1,4 +1,4 @@
-use axum::extract::ws::{CloseFrame as axCloseFrame, Message as axMessage};
+use axum::extract::ws::{CloseFrame as axCloseFrame, Message as axMessage, Message};
 use axum::{
     Router,
     extract::{
@@ -9,13 +9,14 @@ use axum::{
     routing::{any, get},
 };
 use axum_extra::TypedHeader;
+use shared::{ClientToServerWsMessage, ServerToClientWsMessage};
 use std::net::SocketAddr;
 use std::path::PathBuf;
 use tokio::net::TcpListener;
 use tokio::sync::mpsc::unbounded_channel;
 use tokio_util::sync::CancellationToken;
 use tower_http::services::ServeDir;
-use tracing::{Level, error, info};
+use tracing::{Level, error, info, warn};
 use tracing_subscriber::FmtSubscriber;
 
 mod game;
@@ -130,7 +131,7 @@ async fn handle_socket(
     }
 
     let disconnect_reason = {
-        let joined = shared::ClientWsMessage::Joined(player_id);
+        let joined = ServerToClientWsMessage::Joined(player_id);
         match bincode::encode_to_vec(joined, bincode::config::standard()) {
             Ok(msg_bytes) => {
                 if let Err(e) = socket.send(axMessage::Binary(msg_bytes.into())).await {
@@ -175,24 +176,31 @@ async fn handle_socket(
                         break "kicked";
                     },
                     Some(game::WsMessage::Spawn(position, other_players))=>{
-                        let msg = shared::ClientWsMessage::Spawn(position.clone(), other_players);
+                        let msg = ServerToClientWsMessage::Spawn(position.clone(), other_players);
                         send_or_break!(
                             axMessage::Binary(msg.to_bytes().into()),
                             "spawn send"
                         );
                     },
                     Some(game::WsMessage::PlayerSpawn(other_player)) => {
-                        let msg = shared::ClientWsMessage::PlayerSpawn(other_player.clone());
+                        let msg = ServerToClientWsMessage::PlayerSpawn(other_player.clone());
                         send_or_break!(
                             axMessage::Binary(msg.to_bytes().into()),
                             "player spawn send"
                         );
                     }
                     Some(game::WsMessage::Leave(player_id)) => {
-                        let msg = shared::ClientWsMessage::Leave(player_id);
+                        let msg = ServerToClientWsMessage::Leave(player_id);
                         send_or_break!(
                             axMessage::Binary(msg.to_bytes().into()),
                             "player leave send"
+                        );
+                    },
+                    Some(game::WsMessage::PlayerMoving(player_id, to)) => {
+                        let msg = ServerToClientWsMessage::PlayerMoving(player_id, to);
+                        send_or_break!(
+                            axMessage::Binary(msg.to_bytes().into()),
+                            "player moving send"
                         );
                     }
                 }
@@ -204,15 +212,32 @@ async fn handle_socket(
                         info!("player {} connection closed", player_id);
                         break "connection closed";
                     },
-                    Some(Ok(message)) => {
-                        // Handle the websocket message from the player
-                        info!("player {} sent message: {:?}", player_id, message);
-                    },
                     Some(Err(error)) => {
                         // Connection error
                         info!("player {} connection error: {:?}", player_id, error);
                         break "connection error";
                     }
+                    Some(Ok(message)) => {
+                        // Handle the websocket message from the player
+                        info!("player {} sent message: {:?}", player_id, message);
+
+                        match message {
+                            Message::Binary(bytes) => {
+
+                                let decoded: ClientToServerWsMessage = match bincode::decode_from_slice(&bytes, bincode::config::standard()) {
+                                    Ok((msg, _size)) => msg,
+                                    Err(error) => {
+                                        warn!("failed to decode client message error: {:?}", error);
+                                        continue;
+                                    }
+                                };
+                                handle.client_message(player_id, decoded).await;
+                            }
+                            _ => {
+                                info!("player {} sent invalid message type: {:?}", player_id, message);
+                            }
+                        };
+                    },
                 }
             }
         }

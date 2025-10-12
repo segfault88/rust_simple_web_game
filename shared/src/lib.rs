@@ -3,7 +3,7 @@ use bincode::{Decode, Encode};
 pub type PlayerId = u16;
 
 #[derive(Encode, Decode, Debug)]
-pub enum ClientWsMessage {
+pub enum ServerToClientWsMessage {
     Joined(PlayerId),
     // Spawn this player
     Spawn(Position, Vec<OtherPlayer>),
@@ -11,9 +11,24 @@ pub enum ClientWsMessage {
     PlayerSpawn(OtherPlayer),
     // Other play left / disconnected
     Leave(PlayerId),
+    // Other player started moving (for example, by clicking on their canvas)
+    PlayerMoving(PlayerId, Position),
 }
 
-impl ClientWsMessage {
+impl ServerToClientWsMessage {
+    pub fn to_bytes(&self) -> Vec<u8> {
+        // todo: clean up unwrap
+        bincode::encode_to_vec(self, bincode::config::standard()).unwrap()
+    }
+}
+
+#[derive(Encode, Decode, Debug)]
+pub enum ClientToServerWsMessage {
+    // Player started moving (by clicking for now)
+    StartMoving(Position),
+}
+
+impl ClientToServerWsMessage {
     pub fn to_bytes(&self) -> Vec<u8> {
         // todo: clean up unwrap
         bincode::encode_to_vec(self, bincode::config::standard()).unwrap()
@@ -47,4 +62,5 @@ impl Position {
 pub struct OtherPlayer {
     pub player_id: PlayerId,
     pub position: Position,
+    pub moving_to: Option<Position>,
 }

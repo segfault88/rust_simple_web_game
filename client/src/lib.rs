@@ -1,5 +1,4 @@
-use shared::OtherPlayer;
-use shared::Position;
+use shared::{ClientToServerWsMessage, OtherPlayer, Position, ServerToClientWsMessage};
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::f64::consts::PI;
@@ -47,6 +46,7 @@ struct GameClient {
     canvas_callbacks: Option<CanvasCallbacks>,
     player_id: Option<shared::PlayerId>,
     position: Option<shared::Position>,
+    moving_to: Option<shared::Position>,
     other_players: HashMap<shared::PlayerId, OtherPlayer>,
 }
 
@@ -81,6 +81,7 @@ impl GameClient {
             canvas_callbacks: None,
             player_id: None,
             position: None,
+            moving_to: None,
             other_players: HashMap::new(),
         })
     }
@@ -106,7 +107,7 @@ impl GameClient {
         let bytes = uint8_array.to_vec();
 
         // decode the bincode message
-        let message: shared::ClientWsMessage =
+        let message: ServerToClientWsMessage =
             match bincode::decode_from_slice(&bytes, bincode::config::standard()) {
                 Ok((msg, _size)) => msg,
                 Err(e) => {
@@ -117,11 +118,11 @@ impl GameClient {
 
         // Handle the message
         match message {
-            shared::ClientWsMessage::Joined(player_id) => {
+            ServerToClientWsMessage::Joined(player_id) => {
                 console_log!("joined game as player {}", player_id);
                 self.player_id = Some(player_id);
             }
-            shared::ClientWsMessage::Spawn(position, other_players) => {
+            ServerToClientWsMessage::Spawn(position, other_players) => {
                 console_log!("spawning at {:?}", position);
                 self.position = Some(position);
 
@@ -132,7 +133,7 @@ impl GameClient {
                         .insert(other_player.player_id, other_player.clone());
                 }
             }
-            shared::ClientWsMessage::PlayerSpawn(other_player) => {
+            ServerToClientWsMessage::PlayerSpawn(other_player) => {
                 console_log!(
                     "spawning other player id: {:?} at {:?}",
                     other_player.player_id,
@@ -141,10 +142,30 @@ impl GameClient {
                 self.other_players
                     .insert(other_player.player_id, other_player.clone());
             }
-            shared::ClientWsMessage::Leave(player_id) => {
+            ServerToClientWsMessage::Leave(player_id) => {
                 console_log!("player left, removing id: {:?}", player_id);
                 if self.other_players.remove(&player_id).is_none() {
                     console_log!("attempted to remove player not in other_players map");
+                }
+            }
+            ServerToClientWsMessage::PlayerMoving(player_id, to) => {
+                match self.other_players.get_mut(&player_id) {
+                    Some(player) => {
+                        console_log!(
+                            "other player started moving id: {:?}, to: {:?}",
+                            player_id,
+                            to
+                        );
+
+                        player.moving_to = Some(to.clone());
+                    }
+                    None => {
+                        console_log!(
+                            "got player started moving for player that doesn't exist, ignoring id: {:?}, to: {:?}",
+                            player_id,
+                            to
+                        );
+                    }
                 }
             }
         }
@@ -253,11 +274,35 @@ impl GameClient {
 
     // Handle canvas click event
     fn on_canvas_click(&mut self, event: MouseEvent) {
-        let x = event.offset_x() as f64;
-        let y = event.offset_y() as f64;
-        console_log!("canvas clicked at: ({}, {})", x, y);
+        match &self.position {
+            Some(position) => {
+                let width = self.canvas.width() as f64;
+                let height = self.canvas.height() as f64;
 
-        // TODO: implement click handling logic
+                let x = event.offset_x() as f64;
+                let y = event.offset_y() as f64;
+
+                // TODO: implement click handling logic
+                let world_position = screen_space_to_world_space(position, x, y, width, height);
+
+                console_log!(
+                    "canvas clicked at: ({}, {}), world: {:?}",
+                    x,
+                    y,
+                    world_position
+                );
+
+                _ = self.send_message(&ClientToServerWsMessage::StartMoving(
+                    world_position.clone(),
+                ));
+
+                // start moving on the client immediately
+                self.moving_to = Some(world_position);
+            }
+            _ => {
+                console_log!("click but no possition, doing nothing");
+            }
+        }
     }
 
     // Set up canvas event listeners
@@ -289,13 +334,22 @@ impl GameClient {
     }
 
     // Send a message through the WebSocket
-    fn _send_message(&self, message: &str) -> Result<(), JsValue> {
+    fn send_message(&self, message: &ClientToServerWsMessage) -> Result<(), JsValue> {
         if let Some(ref ws) = self.ws {
             if ws.ready_state() == WebSocket::OPEN {
-                ws.send_with_str(message)?;
-                console_log!("sent websocket message: {}", message);
+                // encode the bincode message
+
+                let bytes = match bincode::encode_to_vec(message, bincode::config::standard()) {
+                    Ok(msg) => msg,
+                    Err(e) => {
+                        console_log!("failed to encode message: {:?}", e);
+                        return Err("failed to encode".into());
+                    }
+                };
+
+                ws.send_with_u8_array(&bytes)?;
             } else {
-                console_log!("websocket not open, cannot send message");
+                console_log!("websocket not open, cannot send message {:?}", message);
             }
         }
         Ok(())
@@ -401,6 +455,23 @@ fn world_space_to_screen_space(
         width / 2.0 + dx * WORLD_SCALE_FACTOR,
         height / 2.0 + dy * WORLD_SCALE_FACTOR,
     )
+}
+
+fn screen_space_to_world_space(
+    player_position: &Position,
+    screen_x: f64,
+    screen_y: f64,
+    width: f64,
+    height: f64,
+) -> Position {
+    // reverse of world_space_to_screen_space
+    let world_x = player_position.x + (screen_x - width / 2.0) / WORLD_SCALE_FACTOR;
+    let world_y = player_position.y + (screen_y - height / 2.0) / WORLD_SCALE_FACTOR;
+
+    Position {
+        x: world_x,
+        y: world_y,
+    }
 }
 
 // Request the next animation frame with the given closure

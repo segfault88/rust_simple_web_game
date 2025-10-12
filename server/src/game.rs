@@ -1,26 +1,28 @@
-use shared::{OtherPlayer, PlayerId};
+use shared::{ClientToServerWsMessage, OtherPlayer, PlayerId, Position};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender, unbounded_channel};
 use tokio::time::{Duration, interval};
 use tokio_util::sync::CancellationToken;
-use tracing::{info, warn};
+use tracing::{debug, info, warn};
 
 const TICKS_PER_SECOND: u64 = 30;
 
 pub enum WsMessage {
     _Kick,
-    Spawn(shared::Position, Vec<OtherPlayer>),
+    Spawn(Position, Vec<OtherPlayer>),
     PlayerSpawn(OtherPlayer),
     Leave(PlayerId),
+    PlayerMoving(PlayerId, Position),
 }
 
 #[derive(Debug)]
 struct Player {
     player_id: PlayerId,
     state: shared::PlayerState,
-    position: shared::Position,
+    position: Position,
+    moving_to: Option<Position>,
     ws_handler: UnboundedSender<WsMessage>,
 }
 
@@ -29,6 +31,7 @@ impl Player {
         OtherPlayer {
             player_id: self.player_id,
             position: self.position.clone(),
+            moving_to: self.moving_to.clone(),
         }
     }
 }
@@ -61,6 +64,10 @@ enum GameAction {
     },
     Leave {
         player_id: PlayerId,
+    },
+    StartMoving {
+        player_id: PlayerId,
+        to: Position,
     },
 }
 
@@ -120,7 +127,8 @@ impl Game {
                         Player {
                             player_id,
                             state: shared::PlayerState::BeforeSpawn,
-                            position: shared::Position::new(player_id),
+                            position: Position::new(player_id),
+                            moving_to: None,
                             ws_handler: ws_sender,
                         },
                     );
@@ -138,11 +146,47 @@ impl Game {
                         }
                     }
                 }
+                GameAction::StartMoving { player_id, to } => {
+                    debug!(player_id, "start moving: {:?}", to);
+
+                    match lock.players.get_mut(&player_id) {
+                        Some(player) => {
+                            player.moving_to = Some(to.clone());
+                        }
+                        None => {
+                            warn!(
+                                "got start moving for player that doesn't exist player id: {:?} to: {:?}",
+                                player_id, to
+                            );
+                            return;
+                        }
+                    }
+
+                    // broadcast to other players
+                    for player in lock.players.values_mut() {
+                        if player.player_id == player_id {
+                            continue;
+                        }
+
+                        match player
+                            .ws_handler
+                            .send(WsMessage::PlayerMoving(player_id, to.clone()))
+                        {
+                            Ok(_) => {}
+                            Err(error) => {
+                                warn!(
+                                    "failed to broadcast player moving for player: {:?} to: {:?}, error: {:?}",
+                                    player_id, player.player_id, error,
+                                );
+                            }
+                        }
+                    }
+                }
             }
         }
 
         // collect players that need to be spawned
-        let players_to_spawn: Vec<(PlayerId, shared::Position)> = lock
+        let players_to_spawn: Vec<(PlayerId, Position)> = lock
             .players
             .iter()
             .filter(|(_, p)| matches!(p.state, shared::PlayerState::BeforeSpawn))
@@ -182,6 +226,7 @@ impl Game {
                         .send(WsMessage::PlayerSpawn(OtherPlayer {
                             player_id,
                             position: spawn_at.clone(),
+                            moving_to: None,
                         }))
                         .unwrap();
                 }
@@ -218,5 +263,14 @@ impl GameHandle {
     pub async fn remove_player(&self, player_id: PlayerId) {
         let lock = self.state.read().await;
         let _ = lock.send.send(GameAction::Leave { player_id });
+    }
+
+    pub async fn client_message(&self, player_id: PlayerId, message: ClientToServerWsMessage) {
+        let game_message = match message {
+            ClientToServerWsMessage::StartMoving(to) => GameAction::StartMoving { player_id, to },
+        };
+
+        let lock = self.state.read().await;
+        let _ = lock.send.send(game_message);
     }
 }
