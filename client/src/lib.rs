@@ -14,6 +14,7 @@ use web_sys::{
 mod console;
 
 const FILL_COLOR: &'static str = "#333";
+const PLAYER_COLOR: &'static str = "#333388";
 const OTHER_PLAYER_COLOR: &'static str = "#883333";
 const ERROR_COLOR: &'static str = "#ff6961";
 
@@ -413,9 +414,9 @@ impl GameClient {
                 Some(position) => {
                     draw_disconnected = false;
 
-                    ctx.set_fill_style_str(FILL_COLOR);
+                    // draw player circle
+                    ctx.set_fill_style_str(PLAYER_COLOR);
 
-                    // draw player as grey circle
                     ctx.begin_path();
                     ctx.arc(width / 2.0, height / 2.0, 10.0, 0.0, 2.0 * PI)
                         .unwrap();
