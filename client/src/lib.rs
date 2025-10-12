@@ -1,6 +1,8 @@
 use shared::OtherPlayer;
+use shared::Position;
 use std::cell::RefCell;
 use std::collections::HashMap;
+use std::f64::consts::PI;
 use std::rc::Rc;
 use wasm_bindgen::JsCast;
 use wasm_bindgen::prelude::*;
@@ -12,6 +14,7 @@ use web_sys::{
 mod console;
 
 const FILL_COLOR: &'static str = "#333";
+const OTHER_PLAYER_COLOR: &'static str = "#883333";
 const ERROR_COLOR: &'static str = "#ff6961";
 
 #[derive(Debug)]
@@ -265,39 +268,87 @@ impl GameClient {
 
         ctx.set_fill_style_str(FILL_COLOR);
 
-        let should_draw_error =
-            !matches!(self.state, GameState::Running) || self.position.is_none();
+        let mut draw_disconnected = true;
 
-        if should_draw_error {
-            ctx.set_fill_style_str(ERROR_COLOR);
-            ctx.fill_rect(0.0, 0.0, width, height);
-        } else {
-            // draw player as grey circle
-            ctx.begin_path();
-            ctx.arc(width / 2.0, height / 2.0, 10.0, 0.0, 6.0).unwrap();
-            ctx.fill();
-            ctx.close_path();
+        match self.state {
+            GameState::Running => match &self.position {
+                Some(position) => {
+                    draw_disconnected = false;
+
+                    ctx.set_fill_style_str(FILL_COLOR);
+
+                    // draw player as grey circle
+                    ctx.begin_path();
+                    ctx.arc(width / 2.0, height / 2.0, 10.0, 0.0, 2.0 * PI)
+                        .unwrap();
+                    ctx.fill();
+                    ctx.close_path();
+
+                    ctx.set_fill_style_str(OTHER_PLAYER_COLOR);
+
+                    // draw other players
+                    for other_player in self.other_players.values() {
+                        let (other_x, other_y) = world_space_to_screen_space(
+                            position,
+                            &other_player.position,
+                            width,
+                            height,
+                        );
+
+                        ctx.begin_path();
+                        ctx.arc(other_x, other_y, 10.0, 0.0, 2.0 * PI).unwrap();
+                        ctx.fill();
+                        ctx.close_path();
+                    }
+
+                    ctx.set_fill_style_str(FILL_COLOR);
+                }
+                _ => {}
+            },
+            _ => {}
         }
 
-        ctx.set_fill_style_str(FILL_COLOR);
+        if draw_disconnected {
+            ctx.set_fill_style_str(ERROR_COLOR);
+            ctx.fill_rect(0.0, 0.0, width, height);
+            ctx.set_fill_style_str(FILL_COLOR);
+        }
 
         // Draw text with frame counter
         ctx.set_font("15px sans-serif");
         let text = format!(
-            "player_id: {}, state: {:?} frame: {}",
+            "player_id: {}, state: {:?}",
             self.player_id.unwrap_or_default(),
             self.state,
-            self.frame_count
         );
-        ctx.fill_text(&text, 50.0, 50.0).unwrap();
+        ctx.fill_text(&text, 20.0, 20.0).unwrap();
         let position_str = match &(self.position) {
             None => "at: none".into(),
             Some(position) => format!("at: x: {}, y: {}", position.x, position.y),
         };
-        ctx.fill_text(&position_str, 50.0, 75.0).unwrap();
+        ctx.fill_text(&position_str, 20.0, 40.0).unwrap();
         let other_players_str = format!("other players: {}", self.other_players.len());
-        ctx.fill_text(&other_players_str, 50.0, 100.0).unwrap();
+        ctx.fill_text(&other_players_str, 20.0, 60.0).unwrap();
     }
+}
+
+const WORLD_SCALE_FACTOR: f64 = 10.0;
+
+fn world_space_to_screen_space(
+    player_position: &Position,
+    other: &Position,
+    width: f64,
+    height: f64,
+) -> (f64, f64) {
+    // difference in world space
+    let dx = other.x - player_position.x;
+    let dy = other.y - player_position.y;
+
+    // scale and add screen center offset (current player is always at center of the screen)
+    (
+        width / 2.0 + dx * WORLD_SCALE_FACTOR,
+        height / 2.0 + dy * WORLD_SCALE_FACTOR,
+    )
 }
 
 // Request the next animation frame with the given closure

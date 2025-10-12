@@ -35,9 +35,9 @@ pub struct Position {
 
 impl Position {
     pub fn new(player_id: PlayerId) -> Position {
-        // this is weird, but for now, spawn a player at x = 10 * player_id so they spawn spread out
+        // this is weird, but for now, spawn a player at x = 5 * player_id so they spawn spread out
         Position {
-            x: player_id as f64 * 10.0,
+            x: player_id as f64 * 5.0,
             y: 0.0,
         }
     }
