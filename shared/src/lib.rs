@@ -9,6 +9,8 @@ pub enum ClientWsMessage {
     Spawn(Position, Vec<OtherPlayer>),
     // Spawning other players
     PlayerSpawn(OtherPlayer),
+    // Other play left / disconnected
+    Leave(PlayerId),
 }
 
 impl ClientWsMessage {

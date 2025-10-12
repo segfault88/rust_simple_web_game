@@ -1,4 +1,4 @@
-use shared::OtherPlayer;
+use shared::{OtherPlayer, PlayerId};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
@@ -13,11 +13,12 @@ pub enum WsMessage {
     _Kick,
     Spawn(shared::Position, Vec<OtherPlayer>),
     PlayerSpawn(OtherPlayer),
+    Leave(PlayerId),
 }
 
 #[derive(Debug)]
 struct Player {
-    player_id: shared::PlayerId,
+    player_id: PlayerId,
     state: shared::PlayerState,
     position: shared::Position,
     ws_handler: UnboundedSender<WsMessage>,
@@ -34,11 +35,10 @@ impl Player {
 
 #[derive(Debug)]
 pub struct GameState {
-    player_count: shared::PlayerId,
-    next_player_id: shared::PlayerId,
+    next_player_id: PlayerId,
     send: UnboundedSender<GameAction>,
     receive: UnboundedReceiver<GameAction>,
-    players: HashMap<shared::PlayerId, Player>,
+    players: HashMap<PlayerId, Player>,
 }
 
 impl GameState {
@@ -46,7 +46,6 @@ impl GameState {
         let (send, receive) = unbounded_channel::<GameAction>();
 
         GameState {
-            player_count: 0,
             next_player_id: 1,
             send,
             receive,
@@ -57,11 +56,11 @@ impl GameState {
 
 enum GameAction {
     Join {
-        player_id: shared::PlayerId,
+        player_id: PlayerId,
         ws_sender: UnboundedSender<WsMessage>,
     },
     Leave {
-        player_id: shared::PlayerId,
+        player_id: PlayerId,
     },
 }
 
@@ -129,13 +128,16 @@ impl Game {
                 GameAction::Leave { player_id } => {
                     info!(player_id, "completing leave");
                     lock.players.remove(&player_id);
-                    lock.player_count = lock.player_count.saturating_sub(1);
+                    // notify all other players that the player left
+                    for player in lock.players.values() {
+                        player.ws_handler.send(WsMessage::Leave(player_id)).unwrap();
+                    }
                 }
             }
         }
 
         // collect players that need to be spawned
-        let players_to_spawn: Vec<(shared::PlayerId, shared::Position)> = lock
+        let players_to_spawn: Vec<(PlayerId, shared::Position)> = lock
             .players
             .iter()
             .filter(|(_, p)| matches!(p.state, shared::PlayerState::BeforeSpawn))
@@ -184,14 +186,13 @@ pub struct GameHandle {
 }
 
 impl GameHandle {
-    pub async fn player_count(&self) -> shared::PlayerId {
+    pub async fn player_count(&self) -> u16 {
         let lock = self.state.read().await;
-        lock.player_count
+        lock.players.len() as u16
     }
 
-    pub async fn add_player(&self, ws_sender: UnboundedSender<WsMessage>) -> shared::PlayerId {
+    pub async fn add_player(&self, ws_sender: UnboundedSender<WsMessage>) -> PlayerId {
         let mut lock = self.state.write().await;
-        lock.player_count += 1;
         let player_id = lock.next_player_id;
         lock.next_player_id += 1;
 
@@ -205,7 +206,7 @@ impl GameHandle {
         player_id
     }
 
-    pub async fn remove_player(&self, player_id: shared::PlayerId) {
+    pub async fn remove_player(&self, player_id: PlayerId) {
         let lock = self.state.read().await;
         let _ = lock.send.send(GameAction::Leave { player_id });
     }

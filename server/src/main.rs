@@ -188,6 +188,13 @@ async fn handle_socket(
                             "player spawn send"
                         );
                     }
+                    Some(game::WsMessage::Leave(player_id)) => {
+                        let msg = shared::ClientWsMessage::Leave(player_id);
+                        send_or_break!(
+                            axMessage::Binary(msg.to_bytes().into()),
+                            "player leave send"
+                        );
+                    }
                 }
             },
             from_player = socket.recv() => {

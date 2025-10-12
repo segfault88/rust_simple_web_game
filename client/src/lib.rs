@@ -132,6 +132,10 @@ impl GameClient {
                 self.other_players
                     .insert(other_player.player_id, other_player.clone());
             }
+            shared::ClientWsMessage::Leave(player_id) => {
+                console_log!("player left, removing id: {:?}", player_id);
+                self.other_players.remove(&player_id).unwrap();
+            }
         }
     }
 
