@@ -167,39 +167,39 @@ async fn handle_socket(
                         info!("recv none from game, player_id {:?}", player_id);
                         break "game closed channel";
                      },
-                    Some(game::WsMessage::_Kick)=>{
+                    Some(game::WsMessage::Kick)=>{
                         info!("kicking player {}", player_id);
                         send_or_break!(
-                            axMessage::Close(Some(axCloseFrame{code:std::u16::MAX, reason: "kicked".into()})),
+                            axMessage::Close(Some(axCloseFrame{code:u16::MAX, reason: "kicked".into()})),
                             "kicked"
                         );
                         break "kicked";
                     },
                     Some(game::WsMessage::Spawn(position, other_players))=>{
-                        let msg = ServerToClientWsMessage::Spawn(position.clone(), other_players);
+                        let msg = ServerToClientWsMessage::Spawn(position, other_players);
                         send_or_break!(
-                            axMessage::Binary(msg.to_bytes().into()),
+                            axMessage::Binary(bincode::encode_to_vec(msg, bincode::config::standard()).unwrap().into()),
                             "spawn send"
                         );
                     },
                     Some(game::WsMessage::PlayerSpawn(other_player)) => {
-                        let msg = ServerToClientWsMessage::PlayerSpawn(other_player.clone());
+                        let msg = ServerToClientWsMessage::PlayerSpawn(other_player);
                         send_or_break!(
-                            axMessage::Binary(msg.to_bytes().into()),
+                            axMessage::Binary(bincode::encode_to_vec(msg, bincode::config::standard()).unwrap().into()),
                             "player spawn send"
                         );
                     }
                     Some(game::WsMessage::Leave(player_id)) => {
                         let msg = ServerToClientWsMessage::Leave(player_id);
                         send_or_break!(
-                            axMessage::Binary(msg.to_bytes().into()),
+                            axMessage::Binary(bincode::encode_to_vec(msg, bincode::config::standard()).unwrap().into()),
                             "player leave send"
                         );
                     },
                     Some(game::WsMessage::PlayerMoving(player_id, from, to)) => {
                         let msg = ServerToClientWsMessage::PlayerMoving(player_id,from, to);
                         send_or_break!(
-                            axMessage::Binary(msg.to_bytes().into()),
+                            axMessage::Binary(bincode::encode_to_vec(msg, bincode::config::standard()).unwrap().into()),
                             "player moving send"
                         );
                     }

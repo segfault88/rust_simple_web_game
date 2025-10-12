@@ -11,7 +11,7 @@ use tracing::{debug, info, warn};
 const TICKS_PER_SECOND: u64 = 30;
 
 pub enum WsMessage {
-    _Kick,
+    Kick,
     Spawn(Position, Vec<OtherPlayer>),
     PlayerSpawn(OtherPlayer),
     Leave(PlayerId),
@@ -30,9 +30,9 @@ struct Player {
 
 impl Player {
     pub fn to_other_player(&self) -> OtherPlayer {
-        // Check if the player has already reached their target
+        // check if the player has already reached their target
         let moving_to = if let Some(target) = &self.moving_to {
-            let diff = target.sub(&self.position);
+            let diff = target - &self.position;
             let distance = (diff.x * diff.x + diff.y * diff.y).sqrt();
             if distance <= shared::STOP_WHEN_CLOSER_THAN {
                 None // Already at target, don't include moving_to
@@ -110,7 +110,7 @@ impl Game {
     pub async fn start(&self, cancel_token: CancellationToken) {
         info!("Game loop starting");
 
-        let tick_interval = Duration::from_micros((1e6 as u64) / TICKS_PER_SECOND);
+        let tick_interval = Duration::from_micros(1_000_000u64 / TICKS_PER_SECOND);
         let mut tick_timer = interval(tick_interval);
 
         // Skip the first tick which fires immediately
@@ -262,7 +262,7 @@ impl Game {
                     shared::update_pos_move(&player.position, target, update_time);
 
                 player.position = new_pos;
-                if distance == 0.0 {
+                if distance <= shared::STOP_WHEN_CLOSER_THAN {
                     // reached target, stop
                     player.moving_to = None;
                 }

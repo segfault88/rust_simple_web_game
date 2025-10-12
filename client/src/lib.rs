@@ -13,10 +13,10 @@ use web_sys::{
 
 mod console;
 
-const FILL_COLOR: &'static str = "#333";
-const PLAYER_COLOR: &'static str = "#333388";
-const OTHER_PLAYER_COLOR: &'static str = "#883333";
-const ERROR_COLOR: &'static str = "#ff6961";
+const FILL_COLOR: &str = "#333";
+const PLAYER_COLOR: &str = "#333388";
+const OTHER_PLAYER_COLOR: &str = "#883333";
+const ERROR_COLOR: &str = "#ff6961";
 
 #[derive(Debug)]
 enum GameState {
@@ -309,7 +309,7 @@ impl GameClient {
                 self.moving_to = Some(world_position);
             }
             _ => {
-                console_log!("click but no possition, doing nothing");
+                console_log!("click but no position, doing nothing");
             }
         }
     }
@@ -376,7 +376,7 @@ impl GameClient {
             // moving current player
             let (new_pos, distance) = shared::update_pos_move(from, to, since);
             self.position = Some(new_pos);
-            if distance == 0.0 {
+            if distance <= shared::STOP_WHEN_CLOSER_THAN {
                 self.moving_to = None;
             }
         }
@@ -386,7 +386,7 @@ impl GameClient {
                 // move other player
                 let (new_pos, distance) = shared::update_pos_move(from, to, since);
                 other_player.position = new_pos;
-                if distance == 0.0 {
+                if distance <= shared::STOP_WHEN_CLOSER_THAN {
                     other_player.moving_to = None;
                 }
             }

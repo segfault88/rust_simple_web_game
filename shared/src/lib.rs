@@ -1,4 +1,5 @@
 use bincode::{Decode, Encode};
+use std::ops::Sub;
 use std::time::Duration;
 
 pub type PlayerId = u16;
@@ -18,24 +19,10 @@ pub enum ServerToClientWsMessage {
     PlayerMoving(PlayerId, Position, Position),
 }
 
-impl ServerToClientWsMessage {
-    pub fn to_bytes(&self) -> Vec<u8> {
-        // todo: clean up unwrap
-        bincode::encode_to_vec(self, bincode::config::standard()).unwrap()
-    }
-}
-
 #[derive(Encode, Decode, Debug)]
 pub enum ClientToServerWsMessage {
     // Player started moving (by clicking for now)
     StartMoving(Position),
-}
-
-impl ClientToServerWsMessage {
-    pub fn to_bytes(&self) -> Vec<u8> {
-        // todo: clean up unwrap
-        bincode::encode_to_vec(self, bincode::config::standard()).unwrap()
-    }
 }
 
 #[derive(Encode, Decode, Debug)]
@@ -45,7 +32,7 @@ pub enum PlayerState {
     Dead,
 }
 
-#[derive(Encode, Decode, Debug, Clone, Default)]
+#[derive(Encode, Decode, Debug, Clone, Copy, Default)]
 pub struct Position {
     pub x: f64, // f64 for now, consider fixed point
     pub y: f64,
@@ -62,7 +49,7 @@ impl Position {
 
     pub fn normalize(&self) -> Position {
         let magnitude = (self.x * self.x + self.y * self.y).sqrt();
-        if magnitude == 0.0 {
+        if magnitude <= STOP_WHEN_CLOSER_THAN {
             Position { x: 0.0, y: 0.0 }
         } else {
             Position {
@@ -71,8 +58,23 @@ impl Position {
             }
         }
     }
+}
 
-    pub fn sub(&self, rhs: &Position) -> Position {
+impl Sub for Position {
+    type Output = Self;
+
+    fn sub(self, rhs: Position) -> Position {
+        Position {
+            x: self.x - rhs.x,
+            y: self.y - rhs.y,
+        }
+    }
+}
+
+impl Sub<&Position> for &Position {
+    type Output = Position;
+
+    fn sub(self, rhs: &Position) -> Position {
         Position {
             x: self.x - rhs.x,
             y: self.y - rhs.y,
@@ -83,7 +85,7 @@ impl Position {
 // world units per second, constant for now
 pub const SPEED: f64 = 20.0;
 // stop trying to move when distance <= this
-pub const STOP_WHEN_CLOSER_THAN: f64 = 0.02;
+pub const STOP_WHEN_CLOSER_THAN: f64 = 0.01;
 
 // calculate move given target position, speed and duration since last frame, returns new position and distance (used to stop)
 pub fn update_pos_move(
@@ -91,7 +93,7 @@ pub fn update_pos_move(
     target: &Position,
     update_time: Duration,
 ) -> (Position, f64) {
-    let diff = target.sub(from);
+    let diff = target - from;
     let distance_to_target = (diff.x * diff.x + diff.y * diff.y).sqrt();
 
     // stop here if close enough
