@@ -4,10 +4,11 @@ Project to learn Rust by creating a simple web based game. Probably not interest
 
 Just a very rough, basic demo to understand how all the parts come together and to try some simple ideas.
 
+Currently online at [https://rswg.lambda.nz/](https://rswg.lambda.nz/) being hosted on a $5/month VM. Pushed directly from the gh actions runner.
 
 ## Shared
 
-TODO - mainly types and logic to be shared between client and server
+Enums and a little bit of logic shared between client and server.
 
 ## Client
 

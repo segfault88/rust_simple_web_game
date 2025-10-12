@@ -219,8 +219,6 @@ async fn handle_socket(
                     }
                     Some(Ok(message)) => {
                         // Handle the websocket message from the player
-                        info!("player {} sent message: {:?}", player_id, message);
-
                         match message {
                             Message::Binary(bytes) => {
 
