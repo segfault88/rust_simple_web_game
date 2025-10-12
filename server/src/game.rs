@@ -7,7 +7,7 @@ use tokio::time::{Duration, interval};
 use tokio_util::sync::CancellationToken;
 use tracing::info;
 
-const TICKS_PER_SECOND: u64 = 1;
+const TICKS_PER_SECOND: u64 = 30;
 
 pub enum WsMessage {
     _Kick,
