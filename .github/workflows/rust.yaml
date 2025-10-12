@@ -59,13 +59,8 @@ jobs:
       - name: Output dir
         run: mkdir -p out/static/pkg
 
-      # - name: Install wasm-pack
-      #   run: cargo install wasm-pack
-
-      - uses: jetli/wasm-pack-action@v0.4.0
-        with:
-          # Optional version of wasm-pack to install(eg. 'v0.9.1', 'latest')
-          version: "latest"
+      - name: Install wasm-pack
+        uses: jetli/wasm-pack-action@v0.4.0
 
       - name: Build client
         run: |

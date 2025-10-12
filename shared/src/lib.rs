@@ -81,9 +81,9 @@ impl Position {
 }
 
 // world units per second, constant for now
-pub const SPEED: f64 = 15.0;
+pub const SPEED: f64 = 20.0;
 // stop trying to move when distance <= this
-pub const STOP_WHEN_CLOSER_THAN: f64 = 0.01;
+pub const STOP_WHEN_CLOSER_THAN: f64 = 0.02;
 
 // calculate move given target position, speed and duration since last frame, returns new position and distance (used to stop)
 pub fn update_pos_move(
