@@ -9,6 +9,9 @@ use web_sys::{
 
 mod console;
 
+const FILL_COLOR: &'static str = "#333";
+const ERROR_COLOR: &'static str = "#ff6961";
+
 #[derive(Debug)]
 enum GameState {
     Disconnected,
@@ -120,6 +123,7 @@ impl GameClient {
         );
         self.state = GameState::Disconnected;
         self.player_id = None;
+        self.position = None;
         self.ws = None;
         self.ws_callbacks = None;
     }
@@ -127,6 +131,7 @@ impl GameClient {
     fn on_websocket_error(&mut self, event: ErrorEvent) {
         console_log!("websocket error occurred: {:?}", event);
         self.state = GameState::Disconnected;
+        self.position = None;
     }
 
     // Connect to the WebSocket server
@@ -229,23 +234,43 @@ impl GameClient {
         let width = self.canvas.width() as f64;
         let height = self.canvas.height() as f64;
 
+        let ctx = &self.context;
+
         // Clear the canvas
-        self.context.clear_rect(0.0, 0.0, width, height);
+        ctx.clear_rect(0.0, 0.0, width, height);
+
+        ctx.set_fill_style_str(FILL_COLOR);
+
+        let should_draw_error =
+            !matches!(self.state, GameState::Running) || self.position.is_none();
+
+        if should_draw_error {
+            ctx.set_fill_style_str(ERROR_COLOR);
+            ctx.fill_rect(0.0, 0.0, width, height);
+        } else {
+            // draw player as grey circle
+            ctx.begin_path();
+            ctx.arc(width / 2.0, height / 2.0, 10.0, 0.0, 6.0).unwrap();
+            ctx.fill();
+            ctx.close_path();
+        }
+
+        ctx.set_fill_style_str(FILL_COLOR);
 
         // Draw text with frame counter
-        self.context.set_font("15px sans-serif");
+        ctx.set_font("15px sans-serif");
         let text = format!(
             "player_id: {}, state: {:?} frame: {}",
             self.player_id.unwrap_or_default(),
             self.state,
             self.frame_count
         );
-        self.context.fill_text(&text, 50.0, 50.0).unwrap();
+        ctx.fill_text(&text, 50.0, 50.0).unwrap();
         let position_str = match &(self.position) {
             None => "at: none".into(),
             Some(position) => format!("at: x: {}, y: {}", position.x, position.y),
         };
-        self.context.fill_text(&position_str, 50.0, 75.0).unwrap();
+        ctx.fill_text(&position_str, 50.0, 75.0).unwrap();
     }
 }
 
