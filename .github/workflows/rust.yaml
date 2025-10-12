@@ -72,8 +72,8 @@ jobs:
 
       - name: Build server
         run: |
-          cargo build --bin server --release
-          cp -v target/release/server out/
+          cargo build --bin server --release --target x86_64-unknown-linux-musl
+          cp -v target/x86_64-unknown-linux-musl/release/server out/
 
       - name: Copy to server
         uses: appleboy/scp-action@v1
