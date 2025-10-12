@@ -5,7 +5,7 @@ use tokio::sync::RwLock;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender, unbounded_channel};
 use tokio::time::{Duration, interval};
 use tokio_util::sync::CancellationToken;
-use tracing::info;
+use tracing::{info, warn};
 
 const TICKS_PER_SECOND: u64 = 30;
 
@@ -130,7 +130,12 @@ impl Game {
                     lock.players.remove(&player_id);
                     // notify all other players that the player left
                     for player in lock.players.values() {
-                        player.ws_handler.send(WsMessage::Leave(player_id)).unwrap();
+                        if let Err(error) = player.ws_handler.send(WsMessage::Leave(player_id)) {
+                            warn!(
+                                "failed to send leave message for player id: {:?} to player id: {:?}, maybe they are gone? err: {:?}",
+                                player_id, player.player_id, error
+                            );
+                        }
                     }
                 }
             }
