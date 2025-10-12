@@ -7,8 +7,8 @@ use std::rc::Rc;
 use wasm_bindgen::JsCast;
 use wasm_bindgen::prelude::*;
 use web_sys::{
-    CanvasRenderingContext2d, CloseEvent, ErrorEvent, HtmlCanvasElement, MessageEvent, WebSocket,
-    Window,
+    CanvasRenderingContext2d, CloseEvent, ErrorEvent, HtmlCanvasElement, MessageEvent, MouseEvent,
+    WebSocket, Window,
 };
 
 mod console;
@@ -31,6 +31,10 @@ struct WebSocketCallbacks {
     _onerror: Closure<dyn FnMut(ErrorEvent)>,
 }
 
+struct CanvasCallbacks {
+    _onclick: Closure<dyn FnMut(MouseEvent)>,
+}
+
 // The main game client that manages state and rendering
 struct GameClient {
     window: Window,
@@ -40,6 +44,7 @@ struct GameClient {
     state: GameState,
     ws: Option<WebSocket>,
     ws_callbacks: Option<WebSocketCallbacks>,
+    canvas_callbacks: Option<CanvasCallbacks>,
     player_id: Option<shared::PlayerId>,
     position: Option<shared::Position>,
     other_players: HashMap<shared::PlayerId, OtherPlayer>,
@@ -73,6 +78,7 @@ impl GameClient {
             state: GameState::Disconnected,
             ws: None,
             ws_callbacks: None,
+            canvas_callbacks: None,
             player_id: None,
             position: None,
             other_players: HashMap::new(),
@@ -245,6 +251,43 @@ impl GameClient {
         Ok(())
     }
 
+    // Handle canvas click event
+    fn on_canvas_click(&mut self, event: MouseEvent) {
+        let x = event.offset_x() as f64;
+        let y = event.offset_y() as f64;
+        console_log!("canvas clicked at: ({}, {})", x, y);
+
+        // TODO: implement click handling logic
+    }
+
+    // Set up canvas event listeners
+    fn setup_canvas_listeners(client_ref: Rc<RefCell<GameClient>>) -> Result<(), JsValue> {
+        let canvas = {
+            let client = client_ref.borrow();
+            client.canvas.clone()
+        };
+
+        // Create click event handler
+        let onclick_callback = {
+            let client_clone = client_ref.clone();
+            Closure::wrap(Box::new(move |event: MouseEvent| {
+                client_clone.borrow_mut().on_canvas_click(event);
+            }) as Box<dyn FnMut(MouseEvent)>)
+        };
+
+        // Attach the event listener to the canvas
+        canvas
+            .add_event_listener_with_callback("click", onclick_callback.as_ref().unchecked_ref())?;
+
+        // Store the callback so it doesn't get dropped
+        let mut client = client_ref.borrow_mut();
+        client.canvas_callbacks = Some(CanvasCallbacks {
+            _onclick: onclick_callback,
+        });
+
+        Ok(())
+    }
+
     // Send a message through the WebSocket
     fn _send_message(&self, message: &str) -> Result<(), JsValue> {
         if let Some(ref ws) = self.ws {
@@ -378,6 +421,9 @@ fn run() {
 
     // Connect to WebSocket
     GameClient::connect_websocket(client.clone()).expect("Failed to connect to WebSocket");
+
+    // Set up canvas event listeners
+    GameClient::setup_canvas_listeners(client.clone()).expect("Failed to setup canvas listeners");
 
     // Create the animation loop closure
     let f = Rc::new(RefCell::new(None));
