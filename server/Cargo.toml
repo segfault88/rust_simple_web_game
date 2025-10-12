@@ -4,13 +4,14 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-shared = { path = "../shared" }
-axum = { version = "0.8.4", features = ["ws"] }
-tokio = { version = "1.47.1", features = ["full"] }
-tokio-util = { version = "0.7.16", features = ["full"] }
-tracing = { version = "0.1.41", features = ["log"] }
-tracing-subscriber = "0.3.20"
-tower-http = { version = "0.6.6", features = ["fs"] }
-axum-extra = { version = "0.10.3", features = ["typed-header"] }
-futures-util = { version = "0.3.31", features = ["sink"] }
-headers = "0.4.1"
+shared = { workspace = true }
+axum = { workspace = true, features = ["ws"] }
+tokio = { workspace = true, features = ["full"] }
+tokio-util = { workspace = true, features = ["full"] }
+tracing = { workspace = true, features = ["log"] }
+tracing-subscriber = { workspace = true }
+tower-http = { workspace = true, features = ["fs"] }
+axum-extra = { workspace = true, features = ["typed-header"] }
+futures-util = { workspace = true, features = ["sink"] }
+headers = { workspace = true }
+bincode = { workspace = true, features = ["serde"] }

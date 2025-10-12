@@ -1,9 +1,10 @@
+use axum::extract::ws::{CloseFrame as axCloseFrame, Message as axMessage};
 use axum::{
     Router,
     body::Bytes,
     extract::{
         connect_info::ConnectInfo,
-        ws::{Message, WebSocket, WebSocketUpgrade},
+        ws::{CloseFrame, Message, WebSocket, WebSocketUpgrade},
     },
     response::IntoResponse,
     routing::{any, get},
@@ -14,6 +15,7 @@ use futures_util::StreamExt;
 use std::net::SocketAddr;
 use std::path::PathBuf;
 use tokio::net::TcpListener;
+use tokio::sync::mpsc::unbounded_channel;
 use tokio_util::sync::CancellationToken;
 use tower_http::services::ServeDir;
 use tracing::{Level, error, info};
@@ -105,41 +107,88 @@ async fn ws_handler(
     } else {
         String::from("Unknown browser")
     };
-    info!("agent: `{user_agent}` at {addr} connected.");
+    info!("agent: `{user_agent}` at {addr} starting upgrade");
     // finalize the upgrade process by returning upgrade callback.
     // we can customize the callback by sending additional info such as address.
     ws.on_upgrade(move |socket| handle_socket(socket, addr, handle))
 }
 
 async fn handle_socket(
-    socket: WebSocket,
+    mut socket: WebSocket,
     who: SocketAddr,
     handle: std::sync::Arc<game::GameHandle>,
 ) {
+    let (ws_message_send, mut ws_message_rec) = unbounded_channel::<game::WsMessage>();
     // Register player with the game
-    let player_id = handle.add_player().await;
-    info!("player {} connected from {}", player_id, who);
+    let player_id = handle.add_player(ws_message_send).await;
 
-    let (mut sender, mut receiver) = socket.split();
+    // Helper macro for sending messages with consistent error handling - Claude suggested this
+    macro_rules! send_or_return {
+        ($msg:expr) => {
+            if let Err(e) = socket.send($msg).await {
+                info!("player {} send failed: {:?}, returning", player_id, e);
+                return;
+            }
+        };
+    }
 
-    tokio::spawn(async move {
-        loop {
-            let send = sender.send(Message::Ping(Bytes::default())).await;
-            match send {
-                Ok(_) => info!("send ping ok"),
-                Err(err) => {
-                    error!("send ping failed {:?}", err);
-                    break;
+    {
+        let joined = shared::ClientWsMessage::Joined(player_id);
+        // let mut buffer: Vec<u8> = Vec::new();
+
+        // if let Err(error) =
+        //     bincode::encode_into_slice(joined, &mut buffer, bincode::config::standard())
+        // {
+        //     error!("encode_into_slice failed, error: {:?}", error);
+        //     return;
+        // };
+        match bincode::encode_to_vec(joined, bincode::config::standard()) {
+            Ok(msg_bytes) => {
+                send_or_return!(axMessage::Binary(msg_bytes.into()))
+            }
+            Err(error) => {
+                error!("encode_to_vec error {:?}, returning", error);
+                return;
+            }
+        }
+    }
+
+    info!("player {} joined from {}", player_id, who);
+
+    loop {
+        tokio::select! {
+            from_game = ws_message_rec.recv() => {
+                match from_game {
+                    None => {
+                        info!("recv none from game, returning for player_id {:?}", player_id);
+                        return
+                     },
+                    Some(game::WsMessage::Kick)=>{
+                        info!("kicking player {}", player_id);
+                        send_or_return!(
+                            axMessage::Close(Some(axCloseFrame{code:std::u16::MAX, reason: "kicked".into()}))
+                        )
+                    }
+                }
+            },
+            from_player = socket.recv() => {
+                match from_player {
+                    None => {
+                        // Connection closed gracefully
+                        info!("player {} connection closed", player_id);
+                        return
+                    },
+                    Some(Ok(message)) => {
+                        // Handle the websocket message from the player
+                        info!("player {} sent message: {:?}", player_id, message);
+                    },
+                    Some(Err(error)) => {
+                        // Connection error
+                        info!("player {} connection error: {:?}, returning", player_id, error);
+                        return
+                    }
                 }
             }
-
-            tokio::time::sleep(std::time::Duration::from_secs(1)).await;
         }
-    });
-
-    tokio::spawn(async move {
-        while let Some(Ok(msg)) = receiver.next().await {
-            info!("player {} got message {:?}", player_id, msg)
-        }
-    });
+    }
 }

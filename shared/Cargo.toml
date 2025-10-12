@@ -4,3 +4,5 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+bincode = { workspace = true, features = ["serde"] }
+serde = { workspace = true, features = ["serde_derive"] }
