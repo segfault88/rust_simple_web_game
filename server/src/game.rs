@@ -118,7 +118,7 @@ impl Game {
                     lock.players.insert(
                         player_id,
                         Player {
-                            player_id: player_id,
+                            player_id,
                             state: shared::PlayerState::BeforeSpawn,
                             position: shared::Position::new(player_id),
                             ws_handler: ws_sender,
@@ -155,7 +155,9 @@ impl Game {
             let other_players: Vec<OtherPlayer> = lock
                 .players
                 .values()
-                .filter(|p| p.player_id != player_id)
+                .filter(|p| {
+                    p.player_id != player_id && matches!(p.state, shared::PlayerState::Alive)
+                })
                 .map(|p| p.to_other_player())
                 .collect();
 
@@ -171,12 +173,14 @@ impl Game {
             }
 
             // now notify other plays of the spawn
-            for other_player in other_players {
-                if let Some(player) = lock.players.get(&other_player.player_id) {
+            for player in lock.players.values() {
+                if player.player_id != player_id
+                    && matches!(player.state, shared::PlayerState::Alive)
+                {
                     player
                         .ws_handler
                         .send(WsMessage::PlayerSpawn(OtherPlayer {
-                            player_id: player_id,
+                            player_id,
                             position: spawn_at.clone(),
                         }))
                         .unwrap();

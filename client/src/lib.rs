@@ -137,7 +137,9 @@ impl GameClient {
             }
             shared::ClientWsMessage::Leave(player_id) => {
                 console_log!("player left, removing id: {:?}", player_id);
-                self.other_players.remove(&player_id).unwrap();
+                if self.other_players.remove(&player_id).is_none() {
+                    console_log!("attempted to remove player not in other_players map");
+                }
             }
         }
     }
@@ -148,17 +150,24 @@ impl GameClient {
             event.code(),
             event.reason()
         );
+        // this sucks, restructure so not needed
         self.state = GameState::Disconnected;
         self.player_id = None;
         self.position = None;
         self.ws = None;
         self.ws_callbacks = None;
+        self.other_players.clear();
     }
 
     fn on_websocket_error(&mut self, event: ErrorEvent) {
         console_log!("websocket error occurred: {:?}", event);
+        // this sucks, restructure so not needed
         self.state = GameState::Disconnected;
+        self.player_id = None;
         self.position = None;
+        self.ws = None;
+        self.ws_callbacks = None;
+        self.other_players.clear();
     }
 
     // Connect to the WebSocket server
@@ -314,7 +323,7 @@ impl GameClient {
             ctx.set_fill_style_str(FILL_COLOR);
         }
 
-        // Draw text with frame counter
+        // draw status text
         ctx.set_font("15px sans-serif");
         let text = format!(
             "player_id: {}, state: {:?}",
