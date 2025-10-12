@@ -3,6 +3,7 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::f64::consts::PI;
 use std::rc::Rc;
+use std::time::Duration;
 use wasm_bindgen::JsCast;
 use wasm_bindgen::prelude::*;
 use web_sys::{
@@ -48,6 +49,7 @@ struct GameClient {
     position: Option<shared::Position>,
     moving_to: Option<shared::Position>,
     other_players: HashMap<shared::PlayerId, OtherPlayer>,
+    last_frame_time: f64, // milliseconds from performance.now()
 }
 
 impl GameClient {
@@ -70,6 +72,8 @@ impl GameClient {
             .expect("Failed to get 2d context")
             .dyn_into::<CanvasRenderingContext2d>()?;
 
+        let initial_time = window.performance().unwrap().now();
+
         Ok(GameClient {
             window,
             canvas,
@@ -83,6 +87,7 @@ impl GameClient {
             position: None,
             moving_to: None,
             other_players: HashMap::new(),
+            last_frame_time: initial_time,
         })
     }
 
@@ -359,7 +364,31 @@ impl GameClient {
     fn update(&mut self) {
         self.frame_count += 1;
 
-        // Game logic will go here
+        let now = self.window.performance().unwrap().now();
+        let since_ms = now - self.last_frame_time;
+        let since = Duration::from_secs_f64(since_ms / 1000.0);
+
+        if let (Some(to), Some(from)) = (&self.moving_to, &self.position) {
+            // moving current player
+            let (new_pos, distance) = shared::update_pos_move(from, to, since);
+            self.position = Some(new_pos);
+            if distance == 0.0 {
+                self.moving_to = None;
+            }
+        }
+
+        for other_player in self.other_players.values_mut() {
+            if let (Some(to), from) = (&other_player.moving_to, &other_player.position) {
+                // move other player
+                let (new_pos, distance) = shared::update_pos_move(from, to, since);
+                other_player.position = new_pos;
+                if distance == 0.0 {
+                    other_player.moving_to = None;
+                }
+            }
+        }
+
+        self.last_frame_time = now;
     }
 
     // Render the current game state
@@ -430,7 +459,7 @@ impl GameClient {
         ctx.fill_text(&text, 20.0, 20.0).unwrap();
         let position_str = match &(self.position) {
             None => "at: none".into(),
-            Some(position) => format!("at: x: {}, y: {}", position.x, position.y),
+            Some(position) => format!("at: x: {:.2}, y: {:.2}", position.x, position.y),
         };
         ctx.fill_text(&position_str, 20.0, 40.0).unwrap();
         let other_players_str = format!("other players: {}", self.other_players.len());

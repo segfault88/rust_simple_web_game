@@ -28,4 +28,5 @@ web-sys = { workspace = true, features = [
     "MouseEvent",
     "Location",
     "BinaryType",
+    "Performance",
 ] }
