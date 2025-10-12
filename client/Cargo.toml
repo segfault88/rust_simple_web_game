@@ -8,7 +8,23 @@ crate-type = ["cdylib"]
 
 [dependencies]
 shared = { workspace = true }
+bincode = { workspace = true }
 js-sys = { workspace = true }
 wasm-bindgen = { workspace = true }
 wasm-bindgen-futures = { workspace = true }
-web-sys = { workspace = true, features = ["CanvasRenderingContext2d", "HtmlCanvasElement", "console", "Document", "Element", "HtmlElement", "Node", "Window", "WebSocket", "MessageEvent", "CloseEvent", "ErrorEvent", "Location"] }
+web-sys = { workspace = true, features = [
+    "CanvasRenderingContext2d",
+    "HtmlCanvasElement",
+    "console",
+    "Document",
+    "Element",
+    "HtmlElement",
+    "Node",
+    "Window",
+    "WebSocket",
+    "MessageEvent",
+    "CloseEvent",
+    "ErrorEvent",
+    "Location",
+    "BinaryType",
+] }

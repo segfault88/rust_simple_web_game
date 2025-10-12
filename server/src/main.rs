@@ -123,43 +123,59 @@ async fn handle_socket(
     let player_id = handle.add_player(ws_message_send).await;
 
     // Helper macro for sending messages with consistent error handling - Claude suggested this
-    macro_rules! send_or_return {
-        ($msg:expr) => {
+    macro_rules! send_or_break {
+        ($msg:expr, $reason:expr) => {
             if let Err(e) = socket.send($msg).await {
-                info!("player {} send failed: {:?}, returning", player_id, e);
-                return;
+                info!("player {} send failed: {:?}", player_id, e);
+                break $reason;
             }
         };
     }
 
-    {
+    let disconnect_reason = {
         let joined = shared::ClientWsMessage::Joined(player_id);
         match bincode::encode_to_vec(joined, bincode::config::standard()) {
             Ok(msg_bytes) => {
-                send_or_return!(axMessage::Binary(msg_bytes.into()))
+                if let Err(e) = socket.send(axMessage::Binary(msg_bytes.into())).await {
+                    info!("player {} failed to send join message: {:?}", player_id, e);
+                    "send join failed"
+                } else {
+                    info!("player {} joined from {}", player_id, who);
+                    // Continue to main loop
+                    ""
+                }
             }
             Err(error) => {
-                error!("encode_to_vec error {:?}, returning", error);
-                return;
+                error!("encode_to_vec error {:?}", error);
+                "encode join failed"
             }
         }
+    };
+
+    if !disconnect_reason.is_empty() {
+        info!(
+            "player {} disconnected early: {}",
+            player_id, disconnect_reason
+        );
+        handle.remove_player(player_id).await;
+        return;
     }
 
-    info!("player {} joined from {}", player_id, who);
-
-    loop {
+    let disconnect_reason = loop {
         tokio::select! {
             from_game = ws_message_rec.recv() => {
                 match from_game {
                     None => {
-                        info!("recv none from game, returning for player_id {:?}", player_id);
-                        return
+                        info!("recv none from game, player_id {:?}", player_id);
+                        break "game closed channel";
                      },
                     Some(game::WsMessage::Kick)=>{
                         info!("kicking player {}", player_id);
-                        send_or_return!(
-                            axMessage::Close(Some(axCloseFrame{code:std::u16::MAX, reason: "kicked".into()}))
-                        )
+                        send_or_break!(
+                            axMessage::Close(Some(axCloseFrame{code:std::u16::MAX, reason: "kicked".into()})),
+                            "kicked"
+                        );
+                        break "kicked";
                     }
                 }
             },
@@ -168,7 +184,7 @@ async fn handle_socket(
                     None => {
                         // Connection closed gracefully
                         info!("player {} connection closed", player_id);
-                        return
+                        break "connection closed";
                     },
                     Some(Ok(message)) => {
                         // Handle the websocket message from the player
@@ -176,11 +192,15 @@ async fn handle_socket(
                     },
                     Some(Err(error)) => {
                         // Connection error
-                        info!("player {} connection error: {:?}, returning", player_id, error);
-                        return
+                        info!("player {} connection error: {:?}", player_id, error);
+                        break "connection error";
                     }
                 }
             }
         }
-    }
+    };
+
+    // Cleanup: remove player from game
+    info!("player {} disconnected: {}", player_id, disconnect_reason);
+    handle.remove_player(player_id).await;
 }

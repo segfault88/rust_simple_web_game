@@ -32,6 +32,7 @@ struct GameClient {
     state: GameState,
     ws: Option<WebSocket>,
     ws_callbacks: Option<WebSocketCallbacks>,
+    player_id: Option<shared::PlayerId>,
 }
 
 impl GameClient {
@@ -62,6 +63,7 @@ impl GameClient {
             state: GameState::Disconnected,
             ws: None,
             ws_callbacks: None,
+            player_id: None,
         })
     }
 
@@ -72,13 +74,36 @@ impl GameClient {
     }
 
     fn on_websocket_message(&mut self, event: MessageEvent) {
-        console_log!("websocket message received: {:?}", event.data());
-        // TODO: Parse and handle game messages here
-        // For example:
-        // if let Ok(text) = event.data().dyn_into::<js_sys::JsString>() {
-        //     let message = text.as_string().unwrap();
-        //     // Handle the message...
-        // }
+        // Try to get the data as an ArrayBuffer
+        let array_buffer = match event.data().dyn_into::<js_sys::ArrayBuffer>() {
+            Ok(buf) => buf,
+            Err(_) => {
+                console_log!("websocket message is not an ArrayBuffer");
+                return;
+            }
+        };
+
+        // Convert ArrayBuffer to Uint8Array to Vec<u8>
+        let uint8_array = js_sys::Uint8Array::new(&array_buffer);
+        let bytes = uint8_array.to_vec();
+
+        // Decode the bincode message
+        let message: shared::ClientWsMessage =
+            match bincode::decode_from_slice(&bytes, bincode::config::standard()) {
+                Ok((msg, _size)) => msg,
+                Err(e) => {
+                    console_log!("failed to decode message: {:?}", e);
+                    return;
+                }
+            };
+
+        // Handle the message
+        match message {
+            shared::ClientWsMessage::Joined(player_id) => {
+                console_log!("joined game as player {}", player_id);
+                self.player_id = Some(player_id);
+            }
+        }
     }
 
     fn on_websocket_close(&mut self, event: CloseEvent) {
@@ -88,6 +113,7 @@ impl GameClient {
             event.reason()
         );
         self.state = GameState::Disconnected;
+        self.player_id = None;
         self.ws = None;
         self.ws_callbacks = None;
     }
@@ -120,6 +146,8 @@ impl GameClient {
         console_log!("connecting ws: {}", ws_url);
 
         let ws = WebSocket::new(&ws_url)?;
+        // Set binary type to arraybuffer so we can easily decode binary messages
+        ws.set_binary_type(web_sys::BinaryType::Arraybuffer);
 
         // Create event handler closures
         let onopen_callback = {
@@ -201,10 +229,12 @@ impl GameClient {
         // Draw text with frame counter
         self.context.set_font("15px sans-serif");
         let text = format!(
-            "hello from rust state: {:?} frame: {}",
-            self.state, self.frame_count
+            "player_id: {}, state: {:?} frame: {}",
+            self.player_id.unwrap_or_default(),
+            self.state,
+            self.frame_count
         );
-        self.context.fill_text(&text, 150.0, 150.0).unwrap();
+        self.context.fill_text(&text, 50.0, 50.0).unwrap();
     }
 }
 

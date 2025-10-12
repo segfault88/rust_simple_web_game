@@ -36,7 +36,13 @@ impl GameState {
 }
 
 enum GameAction {
-    Join { player_id: shared::PlayerId, ws_sender: UnboundedSender<WsMessage> },
+    Join {
+        player_id: shared::PlayerId,
+        ws_sender: UnboundedSender<WsMessage>,
+    },
+    Leave {
+        player_id: shared::PlayerId,
+    },
 }
 
 pub struct Game {
@@ -85,8 +91,17 @@ impl Game {
 
         while let Ok(action) = lock.receive.try_recv() {
             match action {
-                GameAction::Join { player_id, ws_sender } => {
-                    info!(player_id, "completing join")
+                GameAction::Join {
+                    player_id,
+                    ws_sender,
+                } => {
+                    info!(player_id, "completing join");
+                    lock.ws_handlers.insert(player_id, ws_sender);
+                }
+                GameAction::Leave { player_id } => {
+                    info!(player_id, "completing leave");
+                    lock.ws_handlers.remove(&player_id);
+                    lock.player_count = lock.player_count.saturating_sub(1);
                 }
             }
         }
@@ -110,9 +125,19 @@ impl GameHandle {
         lock.player_count += 1;
         let player_id = lock.next_player_id;
         lock.next_player_id += 1;
-        
-        lock.send.send(GameAction::Join { player_id, ws_sender }).unwrap();
+
+        lock.send
+            .send(GameAction::Join {
+                player_id,
+                ws_sender,
+            })
+            .unwrap();
 
         player_id
+    }
+
+    pub async fn remove_player(&self, player_id: shared::PlayerId) {
+        let lock = self.state.read().await;
+        let _ = lock.send.send(GameAction::Leave { player_id });
     }
 }
