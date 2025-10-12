@@ -81,7 +81,7 @@ impl Position {
 }
 
 // world units per second, constant for now
-pub const SPEED: f64 = 10.0;
+pub const SPEED: f64 = 15.0;
 // stop trying to move when distance <= this
 pub const STOP_WHEN_CLOSER_THAN: f64 = 0.01;
 
