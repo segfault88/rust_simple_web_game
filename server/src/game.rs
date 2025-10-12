@@ -1,6 +1,7 @@
 use shared::{ClientToServerWsMessage, OtherPlayer, PlayerId, Position};
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::time::Instant;
 use tokio::sync::RwLock;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender, unbounded_channel};
 use tokio::time::{Duration, interval};
@@ -14,7 +15,8 @@ pub enum WsMessage {
     Spawn(Position, Vec<OtherPlayer>),
     PlayerSpawn(OtherPlayer),
     Leave(PlayerId),
-    PlayerMoving(PlayerId, Position),
+    // player starts moving, include server's current position as a quick hack to re-sync a bit
+    PlayerMoving(PlayerId, Position, Position),
 }
 
 #[derive(Debug)]
@@ -28,10 +30,23 @@ struct Player {
 
 impl Player {
     pub fn to_other_player(&self) -> OtherPlayer {
+        // Check if the player has already reached their target
+        let moving_to = if let Some(target) = &self.moving_to {
+            let diff = target.sub(&self.position);
+            let distance = (diff.x * diff.x + diff.y * diff.y).sqrt();
+            if distance <= shared::STOP_WHEN_CLOSER_THAN {
+                None // Already at target, don't include moving_to
+            } else {
+                Some(target.clone())
+            }
+        } else {
+            None
+        };
+
         OtherPlayer {
             player_id: self.player_id,
             position: self.position.clone(),
-            moving_to: self.moving_to.clone(),
+            moving_to,
         }
     }
 }
@@ -42,6 +57,7 @@ pub struct GameState {
     send: UnboundedSender<GameAction>,
     receive: UnboundedReceiver<GameAction>,
     players: HashMap<PlayerId, Player>,
+    last_frame_time: Instant,
 }
 
 impl GameState {
@@ -53,6 +69,7 @@ impl GameState {
             send,
             receive,
             players: HashMap::new(),
+            last_frame_time: Instant::now(),
         }
     }
 }
@@ -149,9 +166,10 @@ impl Game {
                 GameAction::StartMoving { player_id, to } => {
                     debug!(player_id, "start moving: {:?}", to);
 
-                    match lock.players.get_mut(&player_id) {
+                    let moving_player_position = match lock.players.get_mut(&player_id) {
                         Some(player) => {
                             player.moving_to = Some(to.clone());
+                            player.position.clone()
                         }
                         None => {
                             warn!(
@@ -160,7 +178,7 @@ impl Game {
                             );
                             return;
                         }
-                    }
+                    };
 
                     // broadcast to other players
                     for player in lock.players.values_mut() {
@@ -168,10 +186,11 @@ impl Game {
                             continue;
                         }
 
-                        match player
-                            .ws_handler
-                            .send(WsMessage::PlayerMoving(player_id, to.clone()))
-                        {
+                        match player.ws_handler.send(WsMessage::PlayerMoving(
+                            player_id,
+                            moving_player_position.clone(),
+                            to.clone(),
+                        )) {
                             Ok(_) => {}
                             Err(error) => {
                                 warn!(
@@ -232,6 +251,24 @@ impl Game {
                 }
             }
         }
+
+        // move players
+        let now = Instant::now();
+        let update_time = now - lock.last_frame_time;
+
+        for player in lock.players.values_mut() {
+            if let Some(target) = &player.moving_to {
+                let (new_pos, distance) =
+                    shared::update_pos_move(&player.position, target, update_time);
+
+                player.position = new_pos;
+                if distance == 0.0 {
+                    // reached target, stop
+                    player.moving_to = None;
+                }
+            }
+        }
+        lock.last_frame_time = now;
     }
 }
 

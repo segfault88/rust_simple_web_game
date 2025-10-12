@@ -153,15 +153,18 @@ impl GameClient {
                     console_log!("attempted to remove player not in other_players map");
                 }
             }
-            ServerToClientWsMessage::PlayerMoving(player_id, to) => {
+            ServerToClientWsMessage::PlayerMoving(player_id, from, to) => {
                 match self.other_players.get_mut(&player_id) {
                     Some(player) => {
                         console_log!(
-                            "other player started moving id: {:?}, to: {:?}",
+                            "other player started moving id: {:?}, from: {:?}, to: {:?}",
                             player_id,
+                            from,
                             to
                         );
 
+                        // overwrite current position to match what the server says
+                        player.position = from;
                         player.moving_to = Some(to.clone());
                     }
                     None => {

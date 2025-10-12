@@ -12,8 +12,10 @@ pub enum ServerToClientWsMessage {
     PlayerSpawn(OtherPlayer),
     // Other play left / disconnected
     Leave(PlayerId),
-    // Other player started moving (for example, by clicking on their canvas)
-    PlayerMoving(PlayerId, Position),
+    // Other player started moving (for example, by clicking on their canvas),
+    // includes current server position as a quick hack to stop desync in this
+    // silly little prototype
+    PlayerMoving(PlayerId, Position, Position),
 }
 
 impl ServerToClientWsMessage {

@@ -196,8 +196,8 @@ async fn handle_socket(
                             "player leave send"
                         );
                     },
-                    Some(game::WsMessage::PlayerMoving(player_id, to)) => {
-                        let msg = ServerToClientWsMessage::PlayerMoving(player_id, to);
+                    Some(game::WsMessage::PlayerMoving(player_id, from, to)) => {
+                        let msg = ServerToClientWsMessage::PlayerMoving(player_id,from, to);
                         send_or_break!(
                             axMessage::Binary(msg.to_bytes().into()),
                             "player moving send"
