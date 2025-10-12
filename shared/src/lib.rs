@@ -1,12 +1,14 @@
 use bincode::{Decode, Encode};
-// use serde::{Deserialize, Serialize};
 
 pub type PlayerId = u16;
 
 #[derive(Encode, Decode, Debug)]
 pub enum ClientWsMessage {
     Joined(PlayerId),
-    Spawn(Position),
+    // Spawn this player
+    Spawn(Position, Vec<OtherPlayer>),
+    // Spawning other players
+    PlayerSpawn(OtherPlayer),
 }
 
 impl ClientWsMessage {
@@ -37,4 +39,10 @@ impl Position {
             y: 0.0,
         }
     }
+}
+
+#[derive(Encode, Decode, Debug, Clone)]
+pub struct OtherPlayer {
+    pub player_id: PlayerId,
+    pub position: Position,
 }

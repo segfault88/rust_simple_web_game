@@ -1,3 +1,4 @@
+use shared::OtherPlayer;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
@@ -9,8 +10,9 @@ use tracing::info;
 const TICKS_PER_SECOND: u64 = 1;
 
 pub enum WsMessage {
-    Kick,
-    Spawn(shared::Position),
+    _Kick,
+    Spawn(shared::Position, Vec<OtherPlayer>),
+    PlayerSpawn(OtherPlayer),
 }
 
 #[derive(Debug)]
@@ -19,6 +21,15 @@ struct Player {
     state: shared::PlayerState,
     position: shared::Position,
     ws_handler: UnboundedSender<WsMessage>,
+}
+
+impl Player {
+    pub fn to_other_player(&self) -> OtherPlayer {
+        OtherPlayer {
+            player_id: self.player_id,
+            position: self.position.clone(),
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -123,21 +134,46 @@ impl Game {
             }
         }
 
-        for (player_id, player) in lock.players.iter_mut() {
-            match player.state {
-                // only spawn for now
-                shared::PlayerState::BeforeSpawn => {
-                    info!(
-                        "spawning player id: {:?} at: {:?}",
-                        player_id, player.position
-                    );
-                    player.state = shared::PlayerState::Alive;
+        // collect players that need to be spawned
+        let players_to_spawn: Vec<(shared::PlayerId, shared::Position)> = lock
+            .players
+            .iter()
+            .filter(|(_, p)| matches!(p.state, shared::PlayerState::BeforeSpawn))
+            .map(|(&id, player)| (id, player.position.clone()))
+            .collect();
+
+        // spawn each player
+        for (player_id, spawn_at) in players_to_spawn {
+            // collect other players (all except the one being spawned)
+            let other_players: Vec<OtherPlayer> = lock
+                .players
+                .values()
+                .filter(|p| p.player_id != player_id)
+                .map(|p| p.to_other_player())
+                .collect();
+
+            // now mutate the current player
+            if let Some(player) = lock.players.get_mut(&player_id) {
+                info!("spawning player id: {:?} at: {:?}", player_id, spawn_at);
+                player.state = shared::PlayerState::Alive;
+
+                player
+                    .ws_handler
+                    .send(WsMessage::Spawn(spawn_at.clone(), other_players.clone()))
+                    .unwrap(); // todo: remove unwrap
+            }
+
+            // now notify other plays of the spawn
+            for other_player in other_players {
+                if let Some(player) = lock.players.get(&other_player.player_id) {
                     player
                         .ws_handler
-                        .send(WsMessage::Spawn(player.position.clone()))
-                        .unwrap(); // todo: remove unwrap
+                        .send(WsMessage::PlayerSpawn(OtherPlayer {
+                            player_id: player_id,
+                            position: spawn_at.clone(),
+                        }))
+                        .unwrap();
                 }
-                _ => {} // for now do nothing when spawned or dead
             }
         }
     }

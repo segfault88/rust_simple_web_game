@@ -1,4 +1,6 @@
+use shared::OtherPlayer;
 use std::cell::RefCell;
+use std::collections::HashMap;
 use std::rc::Rc;
 use wasm_bindgen::JsCast;
 use wasm_bindgen::prelude::*;
@@ -37,6 +39,7 @@ struct GameClient {
     ws_callbacks: Option<WebSocketCallbacks>,
     player_id: Option<shared::PlayerId>,
     position: Option<shared::Position>,
+    other_players: HashMap<shared::PlayerId, OtherPlayer>,
 }
 
 impl GameClient {
@@ -69,6 +72,7 @@ impl GameClient {
             ws_callbacks: None,
             player_id: None,
             position: None,
+            other_players: HashMap::new(),
         })
     }
 
@@ -79,7 +83,7 @@ impl GameClient {
     }
 
     fn on_websocket_message(&mut self, event: MessageEvent) {
-        // Try to get the data as an ArrayBuffer
+        // try to get the data as an ArrayBuffer
         let array_buffer = match event.data().dyn_into::<js_sys::ArrayBuffer>() {
             Ok(buf) => buf,
             Err(_) => {
@@ -88,11 +92,11 @@ impl GameClient {
             }
         };
 
-        // Convert ArrayBuffer to Uint8Array to Vec<u8>
+        // convert ArrayBuffer to Uint8Array to Vec<u8>
         let uint8_array = js_sys::Uint8Array::new(&array_buffer);
         let bytes = uint8_array.to_vec();
 
-        // Decode the bincode message
+        // decode the bincode message
         let message: shared::ClientWsMessage =
             match bincode::decode_from_slice(&bytes, bincode::config::standard()) {
                 Ok((msg, _size)) => msg,
@@ -108,9 +112,25 @@ impl GameClient {
                 console_log!("joined game as player {}", player_id);
                 self.player_id = Some(player_id);
             }
-            shared::ClientWsMessage::Spawn(position) => {
+            shared::ClientWsMessage::Spawn(position, other_players) => {
                 console_log!("spawning at {:?}", position);
                 self.position = Some(position);
+
+                // save the other players
+                self.other_players.clear();
+                for other_player in &other_players {
+                    self.other_players
+                        .insert(other_player.player_id, other_player.clone());
+                }
+            }
+            shared::ClientWsMessage::PlayerSpawn(other_player) => {
+                console_log!(
+                    "spawning other player id: {:?} at {:?}",
+                    other_player.player_id,
+                    other_player.position
+                );
+                self.other_players
+                    .insert(other_player.player_id, other_player.clone());
             }
         }
     }
@@ -271,6 +291,8 @@ impl GameClient {
             Some(position) => format!("at: x: {}, y: {}", position.x, position.y),
         };
         ctx.fill_text(&position_str, 50.0, 75.0).unwrap();
+        let other_players_str = format!("other players: {}", self.other_players.len());
+        ctx.fill_text(&other_players_str, 50.0, 100.0).unwrap();
     }
 }
 

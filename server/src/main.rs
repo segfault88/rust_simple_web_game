@@ -166,7 +166,7 @@ async fn handle_socket(
                         info!("recv none from game, player_id {:?}", player_id);
                         break "game closed channel";
                      },
-                    Some(game::WsMessage::Kick)=>{
+                    Some(game::WsMessage::_Kick)=>{
                         info!("kicking player {}", player_id);
                         send_or_break!(
                             axMessage::Close(Some(axCloseFrame{code:std::u16::MAX, reason: "kicked".into()})),
@@ -174,11 +174,18 @@ async fn handle_socket(
                         );
                         break "kicked";
                     },
-                    Some(game::WsMessage::Spawn(position))=>{
-                        let msg = shared::ClientWsMessage::Spawn(position.clone());
+                    Some(game::WsMessage::Spawn(position, other_players))=>{
+                        let msg = shared::ClientWsMessage::Spawn(position.clone(), other_players);
                         send_or_break!(
                             axMessage::Binary(msg.to_bytes().into()),
                             "spawn send"
+                        );
+                    },
+                    Some(game::WsMessage::PlayerSpawn(other_player)) => {
+                        let msg = shared::ClientWsMessage::PlayerSpawn(other_player.clone());
+                        send_or_break!(
+                            axMessage::Binary(msg.to_bytes().into()),
+                            "player spawn send"
                         );
                     }
                 }
