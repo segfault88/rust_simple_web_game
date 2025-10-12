@@ -134,14 +134,6 @@ async fn handle_socket(
 
     {
         let joined = shared::ClientWsMessage::Joined(player_id);
-        // let mut buffer: Vec<u8> = Vec::new();
-
-        // if let Err(error) =
-        //     bincode::encode_into_slice(joined, &mut buffer, bincode::config::standard())
-        // {
-        //     error!("encode_into_slice failed, error: {:?}", error);
-        //     return;
-        // };
         match bincode::encode_to_vec(joined, bincode::config::standard()) {
             Ok(msg_bytes) => {
                 send_or_return!(axMessage::Binary(msg_bytes.into()))
