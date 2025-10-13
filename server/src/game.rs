@@ -31,13 +31,13 @@ struct Player {
 impl Player {
     pub fn to_other_player(&self) -> OtherPlayer {
         // check if the player has already reached their target
-        let moving_to = if let Some(target) = &self.moving_to {
-            let diff = target - &self.position;
+        let moving_to = if let Some(target) = self.moving_to {
+            let diff = target - self.position;
             let distance = (diff.x * diff.x + diff.y * diff.y).sqrt();
-            if distance <= shared::STOP_WHEN_CLOSER_THAN {
+            if distance < shared::STOP_WHEN_CLOSER_THAN {
                 None // Already at target, don't include moving_to
             } else {
-                Some(target.clone())
+                Some(target)
             }
         } else {
             None
@@ -257,12 +257,12 @@ impl Game {
         let update_time = now - lock.last_frame_time;
 
         for player in lock.players.values_mut() {
-            if let Some(target) = &player.moving_to {
+            if let Some(target) = player.moving_to {
                 let (new_pos, distance) =
-                    shared::update_pos_move(&player.position, target, update_time);
+                    shared::update_pos_move(player.position, target, update_time);
 
                 player.position = new_pos;
-                if distance <= shared::STOP_WHEN_CLOSER_THAN {
+                if distance < shared::STOP_WHEN_CLOSER_THAN {
                     // reached target, stop
                     player.moving_to = None;
                 }

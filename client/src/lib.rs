@@ -372,21 +372,21 @@ impl GameClient {
         let since_ms = now - self.last_frame_time;
         let since = Duration::from_secs_f64(since_ms / 1000.0);
 
-        if let (Some(to), Some(from)) = (&self.moving_to, &self.position) {
+        if let (Some(to), Some(from)) = (self.moving_to, self.position) {
             // moving current player
             let (new_pos, distance) = shared::update_pos_move(from, to, since);
             self.position = Some(new_pos);
-            if distance <= shared::STOP_WHEN_CLOSER_THAN {
+            if distance < shared::STOP_WHEN_CLOSER_THAN {
                 self.moving_to = None;
             }
         }
 
         for other_player in self.other_players.values_mut() {
-            if let (Some(to), from) = (&other_player.moving_to, &other_player.position) {
+            if let (Some(to), from) = (other_player.moving_to, other_player.position) {
                 // move other player
                 let (new_pos, distance) = shared::update_pos_move(from, to, since);
                 other_player.position = new_pos;
-                if distance <= shared::STOP_WHEN_CLOSER_THAN {
+                if distance < shared::STOP_WHEN_CLOSER_THAN {
                     other_player.moving_to = None;
                 }
             }

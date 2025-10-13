@@ -49,7 +49,7 @@ impl Position {
 
     pub fn normalize(&self) -> Position {
         let magnitude = (self.x * self.x + self.y * self.y).sqrt();
-        if magnitude <= STOP_WHEN_CLOSER_THAN {
+        if magnitude < STOP_WHEN_CLOSER_THAN {
             Position { x: 0.0, y: 0.0 }
         } else {
             Position {
@@ -71,33 +71,18 @@ impl Sub for Position {
     }
 }
 
-impl Sub<&Position> for &Position {
-    type Output = Position;
-
-    fn sub(self, rhs: &Position) -> Position {
-        Position {
-            x: self.x - rhs.x,
-            y: self.y - rhs.y,
-        }
-    }
-}
-
 // world units per second, constant for now
 pub const SPEED: f64 = 20.0;
 // stop trying to move when distance <= this
 pub const STOP_WHEN_CLOSER_THAN: f64 = 0.01;
 
 // calculate move given target position, speed and duration since last frame, returns new position and distance (used to stop)
-pub fn update_pos_move(
-    from: &Position,
-    target: &Position,
-    update_time: Duration,
-) -> (Position, f64) {
+pub fn update_pos_move(from: Position, target: Position, update_time: Duration) -> (Position, f64) {
     let diff = target - from;
     let distance_to_target = (diff.x * diff.x + diff.y * diff.y).sqrt();
 
     // stop here if close enough
-    if distance_to_target <= STOP_WHEN_CLOSER_THAN {
+    if distance_to_target < STOP_WHEN_CLOSER_THAN {
         return (target.clone(), 0.0);
     }
 

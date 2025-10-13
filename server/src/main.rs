@@ -1,4 +1,4 @@
-use axum::extract::ws::{CloseFrame as axCloseFrame, Message as axMessage, Message};
+use axum::extract::ws::{CloseFrame as axCloseFrame, Message as axMessage};
 use axum::{
     Router,
     extract::{
@@ -9,6 +9,7 @@ use axum::{
     routing::{any, get},
 };
 use axum_extra::TypedHeader;
+use game::WsMessage;
 use shared::{ClientToServerWsMessage, ServerToClientWsMessage};
 use std::net::SocketAddr;
 use std::path::PathBuf;
@@ -162,48 +163,41 @@ async fn handle_socket(
     let disconnect_reason = loop {
         tokio::select! {
             from_game = ws_message_rec.recv() => {
-                match from_game {
+                let (ws_message, reason) = match from_game {
                     None => {
-                        info!("recv none from game, player_id {:?}", player_id);
-                        break "game closed channel";
-                     },
-                    Some(game::WsMessage::Kick)=>{
-                        info!("kicking player {}", player_id);
-                        send_or_break!(
-                            axMessage::Close(Some(axCloseFrame{code:u16::MAX, reason: "kicked".into()})),
-                            "kicked"
-                        );
-                        break "kicked";
+                        break "game closed channel"
                     },
-                    Some(game::WsMessage::Spawn(position, other_players))=>{
-                        let msg = ServerToClientWsMessage::Spawn(position, other_players);
-                        send_or_break!(
-                            axMessage::Binary(bincode::encode_to_vec(msg, bincode::config::standard()).unwrap().into()),
-                            "spawn send"
-                        );
-                    },
-                    Some(game::WsMessage::PlayerSpawn(other_player)) => {
-                        let msg = ServerToClientWsMessage::PlayerSpawn(other_player);
-                        send_or_break!(
-                            axMessage::Binary(bincode::encode_to_vec(msg, bincode::config::standard()).unwrap().into()),
-                            "player spawn send"
-                        );
+                    Some(from_game_message) => {
+                        match from_game_message {
+                            WsMessage::Kick =>{
+                                send_or_break!(
+                                    axMessage::Close(Some(axCloseFrame{code:u16::MAX, reason: "kicked".into()})),
+                                    "kicked"
+                                );
+                                break "kicked";
+                            },
+                            WsMessage::Spawn(position, other_players) => {
+                                (ServerToClientWsMessage::Spawn(position, other_players), "spawn send")
+                            },
+                            WsMessage::PlayerSpawn(other_player) => {
+                                (ServerToClientWsMessage::PlayerSpawn(other_player), "player spawn send")
+                            },
+                            WsMessage::Leave(player_id) => {
+                                (ServerToClientWsMessage::Leave(player_id), "player leave send")
+                            },
+                            WsMessage::PlayerMoving(player_id, from, to) => {
+                                (ServerToClientWsMessage::PlayerMoving(player_id,from, to), "player moving send")
+                            }
+                        }
                     }
-                    Some(game::WsMessage::Leave(player_id)) => {
-                        let msg = ServerToClientWsMessage::Leave(player_id);
-                        send_or_break!(
-                            axMessage::Binary(bincode::encode_to_vec(msg, bincode::config::standard()).unwrap().into()),
-                            "player leave send"
-                        );
-                    },
-                    Some(game::WsMessage::PlayerMoving(player_id, from, to)) => {
-                        let msg = ServerToClientWsMessage::PlayerMoving(player_id,from, to);
-                        send_or_break!(
-                            axMessage::Binary(bincode::encode_to_vec(msg, bincode::config::standard()).unwrap().into()),
-                            "player moving send"
-                        );
-                    }
-                }
+                };
+
+                // todo - no real error handling, restructure this!
+                let ws_message_bytes = bincode::encode_to_vec(ws_message, bincode::config::standard()).unwrap();
+                send_or_break!(
+                    axMessage::Binary(ws_message_bytes.into()),
+                    reason
+                );
             },
             from_player = socket.recv() => {
                 match from_player {
@@ -220,7 +214,7 @@ async fn handle_socket(
                     Some(Ok(message)) => {
                         // Handle the websocket message from the player
                         match message {
-                            Message::Binary(bytes) => {
+                            axMessage::Binary(bytes) => {
 
                                 let decoded: ClientToServerWsMessage = match bincode::decode_from_slice(&bytes, bincode::config::standard()) {
                                     Ok((msg, _size)) => msg,
