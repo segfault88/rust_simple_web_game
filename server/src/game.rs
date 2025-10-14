@@ -1,15 +1,17 @@
-use shared::{ClientToServerWsMessage, OtherPlayer, PlayerId, Position};
+use anyhow::Result;
+use shared::{ClientToServerWsMessage, OtherPlayer, PlayerId, PlayerState, Position};
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Instant;
-use tokio::sync::RwLock;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender, unbounded_channel};
+use tokio::sync::{RwLock, RwLockWriteGuard};
 use tokio::time::{Duration, interval};
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, info, warn};
 
 const TICKS_PER_SECOND: u64 = 30;
 
+#[derive(Clone)]
 pub enum WsMessage {
     Kick,
     Spawn(Position, Vec<OtherPlayer>),
@@ -47,6 +49,16 @@ impl Player {
             player_id: self.player_id,
             position: self.position.clone(),
             moving_to,
+        }
+    }
+
+    pub fn new_joined_player(player_id: PlayerId, ws_sender: UnboundedSender<WsMessage>) -> Player {
+        Player {
+            player_id: player_id,
+            state: PlayerState::BeforeSpawn,
+            position: Position::new(player_id),
+            moving_to: None,
+            ws_handler: ws_sender,
         }
     }
 }
@@ -132,75 +144,10 @@ impl Game {
     pub async fn game_tick(&self) {
         let mut lock = self.state.write().await;
 
-        while let Ok(action) = lock.receive.try_recv() {
-            match action {
-                GameAction::Join {
-                    player_id,
-                    ws_sender,
-                } => {
-                    info!(player_id, "completing join");
-                    lock.players.insert(
-                        player_id,
-                        Player {
-                            player_id,
-                            state: shared::PlayerState::BeforeSpawn,
-                            position: Position::new(player_id),
-                            moving_to: None,
-                            ws_handler: ws_sender,
-                        },
-                    );
-                }
-                GameAction::Leave { player_id } => {
-                    info!(player_id, "completing leave");
-                    lock.players.remove(&player_id);
-                    // notify all other players that the player left
-                    for player in lock.players.values() {
-                        if let Err(error) = player.ws_handler.send(WsMessage::Leave(player_id)) {
-                            warn!(
-                                "failed to send leave message for player id: {:?} to player id: {:?}, maybe they are gone? err: {:?}",
-                                player_id, player.player_id, error
-                            );
-                        }
-                    }
-                }
-                GameAction::StartMoving { player_id, to } => {
-                    debug!(player_id, "start moving: {:?}", to);
-
-                    let moving_player_position = match lock.players.get_mut(&player_id) {
-                        Some(player) => {
-                            player.moving_to = Some(to.clone());
-                            player.position.clone()
-                        }
-                        None => {
-                            warn!(
-                                "got start moving for player that doesn't exist player id: {:?} to: {:?}",
-                                player_id, to
-                            );
-                            return;
-                        }
-                    };
-
-                    // broadcast to other players
-                    for player in lock.players.values_mut() {
-                        if player.player_id == player_id {
-                            continue;
-                        }
-
-                        match player.ws_handler.send(WsMessage::PlayerMoving(
-                            player_id,
-                            moving_player_position.clone(),
-                            to.clone(),
-                        )) {
-                            Ok(_) => {}
-                            Err(error) => {
-                                warn!(
-                                    "failed to broadcast player moving for player: {:?} to: {:?}, error: {:?}",
-                                    player_id, player.player_id, error,
-                                );
-                            }
-                        }
-                    }
-                }
+        match handle_inbound(&mut lock) {
+            Ok(_) => {}
+            Err(err) => {
+                warn!("error handling inbound: {}", err);
             }
         }
 
@@ -270,6 +217,81 @@ impl Game {
         }
         lock.last_frame_time = now;
     }
+}
+
+fn handle_inbound(lock: &mut RwLockWriteGuard<GameState>) -> Result<()> {
+    while let Ok(action) = lock.receive.try_recv() {
+        match action {
+            GameAction::Join {
+                player_id,
+                ws_sender,
+            } => {
+                info!(player_id, "completing join");
+                lock.players
+                    .insert(player_id, Player::new_joined_player(player_id, ws_sender));
+            }
+            GameAction::Leave { player_id } => {
+                info!(player_id, "completing leave");
+                lock.players.remove(&player_id);
+                // notify all other players that the player left
+                broadcast(lock, Some(player_id), WsMessage::Leave(player_id))?;
+            }
+            GameAction::StartMoving { player_id, to } => {
+                debug!(player_id, "start moving: {:?}", to);
+
+                let moving_player_position = match lock.players.get_mut(&player_id) {
+                    Some(player) => {
+                        player.moving_to = Some(to.clone());
+                        player.position.clone()
+                    }
+                    None => {
+                        warn!(
+                            "got start moving for player that doesn't exist player id: {:?} to: {:?}",
+                            player_id, to
+                        );
+                        continue;
+                    }
+                };
+
+                // broadcast player moving to all other players
+                broadcast(
+                    lock,
+                    Some(player_id),
+                    WsMessage::PlayerMoving(player_id, moving_player_position.clone(), to.clone()),
+                )?;
+            }
+        }
+    }
+
+    Ok(())
+}
+
+/// send a WsMessage to all players, optionally excluding one. For example, when
+/// leaving, all players except the one that left should be notified
+fn broadcast(
+    lock: &mut RwLockWriteGuard<GameState>,
+    exclude_player_id: Option<PlayerId>,
+    message: WsMessage,
+) -> Result<()> {
+    for player in lock.players.values_mut() {
+        if let Some(exclude) = exclude_player_id {
+            if player.player_id == exclude {
+                continue;
+            }
+        }
+
+        match player.ws_handler.send(message.clone()) {
+            Ok(_) => {}
+            Err(error) => {
+                warn!(
+                    "failed to broadcast player message to player_id: {:?}, message: {:?}",
+                    player.player_id, error
+                );
+            }
+        }
+    }
+
+    Ok(())
 }
 
 pub struct GameHandle {

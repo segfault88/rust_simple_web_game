@@ -15,3 +15,5 @@ axum-extra = { workspace = true, features = ["typed-header"] }
 futures-util = { workspace = true, features = ["sink"] }
 headers = { workspace = true }
 bincode = { workspace = true, features = ["serde"] }
+thiserror = "2.0.17"
+anyhow = "1.0.100"

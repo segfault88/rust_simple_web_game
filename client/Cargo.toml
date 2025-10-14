@@ -30,3 +30,4 @@ web-sys = { workspace = true, features = [
     "BinaryType",
     "Performance",
 ] }
+anyhow = "1.0.100"
