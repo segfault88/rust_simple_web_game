@@ -47,14 +47,14 @@ impl Player {
 
         OtherPlayer {
             player_id: self.player_id,
-            position: self.position.clone(),
+            position: self.position,
             moving_to,
         }
     }
 
     pub fn new_joined_player(player_id: PlayerId, ws_sender: UnboundedSender<WsMessage>) -> Player {
         Player {
-            player_id: player_id,
+            player_id,
             state: PlayerState::BeforeSpawn,
             position: Position::new(player_id),
             moving_to: None,
@@ -197,7 +197,7 @@ impl Game {
                 &mut lock,
                 Some(player_id),
                 WsMessage::PlayerSpawn(OtherPlayer {
-                    player_id: player_id,
+                    player_id,
                     position: spawn_at,
                     moving_to: None,
                 }),
@@ -252,8 +252,8 @@ fn handle_inbound(lock: &mut RwLockWriteGuard<GameState>) -> Result<()> {
 
                 let moving_player_position = match lock.players.get_mut(&player_id) {
                     Some(player) => {
-                        player.moving_to = Some(to.clone());
-                        player.position.clone()
+                        player.moving_to = Some(to);
+                        player.position
                     }
                     None => {
                         warn!(
@@ -268,7 +268,7 @@ fn handle_inbound(lock: &mut RwLockWriteGuard<GameState>) -> Result<()> {
                 broadcast(
                     lock,
                     Some(player_id),
-                    WsMessage::PlayerMoving(player_id, moving_player_position.clone(), to.clone()),
+                    WsMessage::PlayerMoving(player_id, moving_player_position, to),
                 )?;
             }
         }
@@ -285,10 +285,10 @@ fn broadcast(
     message: WsMessage,
 ) -> Result<()> {
     for player in lock.players.values_mut() {
-        if let Some(exclude) = exclude_player_id {
-            if player.player_id == exclude {
-                continue;
-            }
+        if let Some(exclude) = exclude_player_id
+            && player.player_id == exclude
+        {
+            continue;
         }
 
         match player.ws_handler.send(message.clone()) {

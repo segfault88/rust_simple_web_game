@@ -166,7 +166,7 @@ impl GameClient {
 
                         // overwrite current position to match what the server says
                         player.position = from;
-                        player.moving_to = Some(to.clone());
+                        player.moving_to = Some(to);
                     }
                     None => {
                         console_log!(
@@ -301,9 +301,7 @@ impl GameClient {
                     world_position
                 );
 
-                _ = self.send_message(&ClientToServerWsMessage::StartMoving(
-                    world_position.clone(),
-                ));
+                _ = self.send_message(&ClientToServerWsMessage::StartMoving(world_position));
 
                 // start moving on the client immediately
                 self.moving_to = Some(world_position);
@@ -409,42 +407,34 @@ impl GameClient {
 
         let mut draw_disconnected = true;
 
-        match self.state {
-            GameState::Running => match &self.position {
-                Some(position) => {
-                    draw_disconnected = false;
+        if let GameState::Running = self.state
+            && let Some(position) = &self.position
+        {
+            draw_disconnected = false;
 
-                    // draw player circle
-                    ctx.set_fill_style_str(PLAYER_COLOR);
+            // draw player circle
+            ctx.set_fill_style_str(PLAYER_COLOR);
 
-                    ctx.begin_path();
-                    ctx.arc(width / 2.0, height / 2.0, 10.0, 0.0, 2.0 * PI)
-                        .unwrap();
-                    ctx.fill();
-                    ctx.close_path();
+            ctx.begin_path();
+            ctx.arc(width / 2.0, height / 2.0, 10.0, 0.0, 2.0 * PI)
+                .unwrap();
+            ctx.fill();
+            ctx.close_path();
 
-                    ctx.set_fill_style_str(OTHER_PLAYER_COLOR);
+            ctx.set_fill_style_str(OTHER_PLAYER_COLOR);
 
-                    // draw other players
-                    for other_player in self.other_players.values() {
-                        let (other_x, other_y) = world_space_to_screen_space(
-                            position,
-                            &other_player.position,
-                            width,
-                            height,
-                        );
+            // draw other players
+            for other_player in self.other_players.values() {
+                let (other_x, other_y) =
+                    world_space_to_screen_space(position, &other_player.position, width, height);
 
-                        ctx.begin_path();
-                        ctx.arc(other_x, other_y, 10.0, 0.0, 2.0 * PI).unwrap();
-                        ctx.fill();
-                        ctx.close_path();
-                    }
+                ctx.begin_path();
+                ctx.arc(other_x, other_y, 10.0, 0.0, 2.0 * PI).unwrap();
+                ctx.fill();
+                ctx.close_path();
+            }
 
-                    ctx.set_fill_style_str(FILL_COLOR);
-                }
-                _ => {}
-            },
-            _ => {}
+            ctx.set_fill_style_str(FILL_COLOR);
         }
 
         if draw_disconnected {

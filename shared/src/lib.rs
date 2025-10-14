@@ -83,7 +83,7 @@ pub fn update_pos_move(from: Position, target: Position, update_time: Duration) 
 
     // stop here if close enough
     if distance_to_target < STOP_WHEN_CLOSER_THAN {
-        return (target.clone(), 0.0);
+        return (target, 0.0);
     }
 
     let vec = diff.normalize();
@@ -91,7 +91,7 @@ pub fn update_pos_move(from: Position, target: Position, update_time: Duration) 
 
     // beware of overshoot
     if move_distance >= distance_to_target {
-        return (target.clone(), 0.0);
+        return (target, 0.0);
     }
 
     (
