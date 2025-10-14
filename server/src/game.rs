@@ -17,7 +17,7 @@ pub enum WsMessage {
     Spawn(Position, Vec<OtherPlayer>),
     PlayerSpawn(OtherPlayer),
     Leave(PlayerId),
-    // player starts moving, include server's current position as a quick hack to re-sync a bit
+    /// player starts moving, include server's current position as a quick hack to re-sync a bit
     PlayerMoving(PlayerId, Position, Position),
 }
 
@@ -151,52 +151,63 @@ impl Game {
             }
         }
 
-        // collect players that need to be spawned
-        let players_to_spawn: Vec<(PlayerId, Position)> = lock
+        // look for players that need to be spawned and spawn them
+        let players_to_spawn: Vec<(u16, Position)> = lock
             .players
             .iter()
-            .filter(|(_, p)| matches!(p.state, shared::PlayerState::BeforeSpawn))
-            .map(|(&id, player)| (id, player.position.clone()))
+            .filter(|(_, p)| matches!(p.state, PlayerState::BeforeSpawn))
+            .map(|(&id, player)| (id, player.position))
             .collect();
 
-        // spawn each player
         for (player_id, spawn_at) in players_to_spawn {
-            // collect other players (all except the one being spawned)
-            let other_players: Vec<OtherPlayer> = lock
+            // when spawning the player, send info about all the other active
+            // players, so prepare the list without the player currently being
+            // spawned
+            let other_players = lock
                 .players
-                .values()
-                .filter(|p| {
-                    p.player_id != player_id && matches!(p.state, shared::PlayerState::Alive)
-                })
-                .map(|p| p.to_other_player())
+                .iter()
+                .filter(|(id, _)| **id != player_id)
+                .map(|(_, player)| player.to_other_player())
                 .collect();
 
-            // now mutate the current player
-            if let Some(player) = lock.players.get_mut(&player_id) {
-                info!("spawning player id: {:?} at: {:?}", player_id, spawn_at);
-                player.state = shared::PlayerState::Alive;
+            match lock.players.get_mut(&player_id) {
+                Some(player) => {
+                    info!(
+                        "spawning player id: {:?} at: {:?}",
+                        player_id, player.position
+                    );
+                    player.state = PlayerState::Alive;
 
-                player
-                    .ws_handler
-                    .send(WsMessage::Spawn(spawn_at.clone(), other_players.clone()))
-                    .unwrap(); // todo: remove unwrap
-            }
-
-            // now notify other plays of the spawn
-            for player in lock.players.values() {
-                if player.player_id != player_id
-                    && matches!(player.state, shared::PlayerState::Alive)
-                {
+                    // send spawn to this player
                     player
                         .ws_handler
-                        .send(WsMessage::PlayerSpawn(OtherPlayer {
-                            player_id,
-                            position: spawn_at.clone(),
-                            moving_to: None,
-                        }))
+                        .send(WsMessage::Spawn(spawn_at, other_players))
                         .unwrap();
                 }
+                None => {
+                    warn!(
+                        "trying to move player from BeforeSpawn to Alive, but player not found player_id: {:?}",
+                        player_id
+                    )
+                }
             }
+
+            // notify other players that this player is spawning
+            let _ = broadcast(
+                &mut lock,
+                Some(player_id),
+                WsMessage::PlayerSpawn(OtherPlayer {
+                    player_id: player_id,
+                    position: spawn_at,
+                    moving_to: None,
+                }),
+            )
+            .inspect_err(|e| {
+                warn!(
+                    "broadcast for playerspawn failed player_id: {:?}, err: {:?}",
+                    player_id, e
+                )
+            });
         }
 
         // move players
