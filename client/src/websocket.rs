@@ -63,7 +63,6 @@ impl WebSocketHandler {
                     bincode::config::standard(),
                 ) {
                     Ok((msg, _)) => {
-                        console_log!("Received message: {:?}", msg);
                         handler_clone.borrow_mut().pending_messages.push(msg);
                     }
                     Err(e) => {

@@ -1,12 +1,13 @@
 use crate::{
     console_log,
-    websocket::WebSocketHandler,
-    world::{self, screen_space_to_world_space},
+    websocket::{ConnectionState, WebSocketHandler},
+    world::{self, screen_space_to_world_space, world_space_to_screen_space},
 };
 use anyhow::{Context, Result};
 use shared::{ClientToServerWsMessage, OtherPlayer, PlayerId, Position, ServerToClientWsMessage};
 use std::cell::RefCell;
 use std::collections::HashMap;
+use std::f64::consts::PI;
 use std::rc::Rc;
 use std::time::Duration;
 use wasm_bindgen::prelude::*;
@@ -89,7 +90,7 @@ impl Client {
                 }
                 ServerToClientWsMessage::Spawn(position, other_players) => {
                     console_log!(
-                        "spawning at {:?} with {} other players",
+                        "spawning at {:.2?} with {} other players",
                         position,
                         other_players.len()
                     );
@@ -102,7 +103,7 @@ impl Client {
                 }
                 ServerToClientWsMessage::PlayerSpawn(other_player) => {
                     console_log!(
-                        "player {} spawned at {:?}",
+                        "player {} spawned at {:.2?}",
                         other_player.player_id,
                         other_player.position
                     );
@@ -117,7 +118,7 @@ impl Client {
                     match self.other_players.get_mut(&player_id) {
                         Some(player) => {
                             console_log!(
-                                "other player started moving id: {:?}, from: {:?}, to: {:?}",
+                                "other player started moving id: {:?}, from: {:.2?}, to: {:.2?}",
                                 player_id,
                                 position,
                                 moving_to
@@ -129,7 +130,7 @@ impl Client {
                         }
                         None => {
                             console_log!(
-                                "got player started moving for player that doesn't exist, ignoring id: {:?}, to: {:?}",
+                                "got player started moving for player that doesn't exist, ignoring id: {:?}, to: {:.2?}",
                                 player_id,
                                 moving_to
                             );
@@ -171,23 +172,67 @@ impl Client {
     /// render to canvas
     pub fn render(&mut self) {
         let size = self.window.inner_size();
-        let ctx = &self.ctx;
-
-        // set background to white
-        ctx.set_fill_style(&"white".into());
-        ctx.fill_rect(0.0, 0.0, size.width as f64, size.height as f64);
-
-        // draw text showing connection state and player info
-        ctx.set_fill_style(&"black".into());
-        ctx.set_font("bold 32px Inter, sans-serif");
+        let (width, height) = (size.width as f64, size.height as f64);
 
         let ws_state = self.ws_handler.borrow().state();
+
+        let ctx = &self.ctx;
+
+        ctx.set_fill_style_str(render_colors::BACKGROUND);
+        ctx.fill_rect(0.0, 0.0, size.width as f64, size.height as f64);
+
+        ctx.set_fill_style_str(render_colors::FILL);
+
+        if ConnectionState::Connected == ws_state
+            && let Some(position) = &self.position
+        {
+            // draw the player circle
+            ctx.set_fill_style_str(render_colors::PLAYER);
+
+            ctx.begin_path();
+            ctx.arc(width / 2.0, height / 2.0, 10.0, 0.0, 2.0 * PI)
+                .unwrap();
+            ctx.fill();
+            ctx.close_path();
+
+            // draw other players
+            ctx.set_fill_style_str(render_colors::OTHER_PLAYER);
+            for other_player in self.other_players.values() {
+                let (other_x, other_y) =
+                    world_space_to_screen_space(position, &other_player.position, width, height);
+
+                ctx.begin_path();
+                ctx.arc(other_x, other_y, 10.0, 0.0, 2.0 * PI).unwrap();
+                ctx.fill();
+                ctx.close_path();
+            }
+
+            ctx.set_fill_style_str(render_colors::FILL);
+        } else {
+            ctx.set_fill_style_str(render_colors::ERROR);
+            ctx.fill_rect(0.0, 0.0, size.width.into(), size.height.into());
+            ctx.set_fill_style_str(render_colors::FILL);
+        }
+
+        // draw text showing connection state and player info
+        ctx.set_font("15px sans-serif");
+
         let text = format!(
-            "State: {:?} | Player: {:?} | Others: {}",
+            "State: {:?} | Player Id: {:?} | Position: {:.2?}",
             ws_state,
             self.player_id,
-            self.other_players.len()
+            self.position.unwrap_or_default()
         );
-        ctx.fill_text(text.as_str(), 50.0, 50.0).unwrap();
+        ctx.fill_text(text.as_str(), 20.0, 40.0).unwrap();
+        let text = format!("Other players: {}", self.other_players.len());
+        ctx.fill_text(&text, 20.0, 60.0).unwrap();
     }
+}
+
+mod render_colors {
+    pub const BACKGROUND: &str = "#fff";
+    pub const FILL: &str = "#333";
+    pub const PLAYER: &str = "#333388";
+    pub const OTHER_PLAYER: &str = "#883333";
+    pub const ERROR: &str = "#ff6961";
 }
