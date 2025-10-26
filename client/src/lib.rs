@@ -1,14 +1,15 @@
 mod client;
 mod console;
+mod websocket;
 mod world;
 
 use anyhow::{Context, Result};
 use client::Client;
-use shared::Position;
 use std::cell::RefCell;
 use std::rc::Rc;
 use wasm_bindgen::prelude::*;
-use web_sys::{CanvasRenderingContext2d, HtmlCanvasElement, WebSocket};
+use web_sys::{CanvasRenderingContext2d, HtmlCanvasElement};
+use websocket::WebSocketHandler;
 use winit::{
     application::ApplicationHandler,
     dpi::PhysicalPosition,
@@ -48,22 +49,9 @@ impl ApplicationHandler<()> for App {
         if let Some(client) = &mut self.client {
             match event {
                 WindowEvent::RedrawRequested => {
-                    let size = client.window.inner_size();
-
-                    let ctx = &client.ctx;
-
-                    // set background to white
-                    ctx.set_fill_style(&"white".into());
-                    ctx.fill_rect(0.0, 0.0, size.width as f64, size.height as f64);
-
-                    // draw text
-                    ctx.set_fill_style(&"black".into());
-                    ctx.set_font("bold 32px Inter, sans-serif");
-                    let text = format!("WTF seems like we can <stuff>");
-                    ctx.fill_text(text.as_str(), 50 as f64, 50 as f64).unwrap();
-
-                    // we need to request a redraw to get a continuous loop
-                    client.window.request_redraw();
+                    client.process_messages();
+                    client.render();
+                    client.request_redraw();
                 }
                 WindowEvent::Resized(size) => {
                     client.canvas.set_width(size.width);
@@ -141,8 +129,26 @@ impl App {
             .dyn_into::<CanvasRenderingContext2d>()
             .unwrap();
 
+        // create websocket handler
+        let ws_handler = Rc::new(RefCell::new(WebSocketHandler::new()));
+
+        let ws_url = {
+            let location = js_window.location();
+            let protocol = if location.protocol().unwrap() == "https:" {
+                "wss:"
+            } else {
+                "ws:"
+            };
+            let host = location.host().unwrap();
+            format!("{}//{}/ws", protocol, host)
+        };
+
+        if let Err(e) = WebSocketHandler::connect(ws_handler.clone(), &ws_url) {
+            console_log!("Failed to connect to WebSocket: {:?}", e);
+        }
+
         // build client, save state
-        self.client = Some(Client::new(window, canvas, ctx));
+        self.client = Some(Client::new(window, canvas, ctx, ws_handler));
         // request draw now
         if let Some(c) = &self.client {
             c.request_redraw();
