@@ -1,9 +1,9 @@
 use anyhow::{Context, Result};
 use wasm_bindgen::prelude::*;
-use web_sys::{CanvasRenderingContext2d, HtmlCanvasElement};
+use web_sys::{CanvasRenderingContext2d, HtmlCanvasElement, WebSocket};
 use winit::{
     application::ApplicationHandler,
-    event::{Event, WindowEvent},
+    event::{ElementState, Event, MouseButton, WindowEvent},
     event_loop::{ActiveEventLoop, ControlFlow, EventLoop},
     window::{Window, WindowAttributes, WindowId},
 };
@@ -12,6 +12,7 @@ use winit::{
 use winit::platform::web::{EventLoopExtWebSys, WindowExtWebSys};
 
 mod console;
+mod world;
 
 struct State {
     window: Window,
@@ -22,6 +23,9 @@ struct State {
 #[derive(Default)]
 struct App {
     state: Option<State>,
+    cursor_x: f64,
+    cursor_y: f64,
+    frame_number: u64,
 }
 
 impl ApplicationHandler<()> for App {
@@ -46,12 +50,24 @@ impl ApplicationHandler<()> for App {
         if let Some(state) = &self.state {
             match event {
                 WindowEvent::RedrawRequested => {
-                    let size = state.window.inner_size();
-                    console_log!("inner_size size: {:?}", size);
+                    self.frame_number += 1;
 
-                    state
-                        .ctx
-                        .clear_rect(0.0, 0.0, size.width as f64, size.height as f64);
+                    let size = state.window.inner_size();
+
+                    let ctx = &state.ctx;
+
+                    // set background to white
+                    ctx.set_fill_style(&"white".into());
+                    ctx.fill_rect(0.0, 0.0, size.width as f64, size.height as f64);
+
+                    // draw text
+                    ctx.set_fill_style(&"black".into());
+                    ctx.set_font("bold 32px Inter, sans-serif");
+                    let text = format!("WTF seems like we can {}", self.frame_number);
+                    ctx.fill_text(text.as_str(), 50 as f64, 50 as f64).unwrap();
+
+                    // we need to request a redraw to get a continuous loop
+                    state.window.request_redraw();
                 }
                 WindowEvent::Resized(size) => {
                     state.canvas.set_width(size.width);
@@ -59,16 +75,24 @@ impl ApplicationHandler<()> for App {
                     state.window.request_redraw();
                 }
                 WindowEvent::CursorEntered { device_id: _ }
-                | WindowEvent::CursorLeft { device_id: _ }
-                | WindowEvent::CursorMoved {
+                | WindowEvent::CursorLeft { device_id: _ } => {}
+                WindowEvent::CursorMoved {
                     device_id: _,
-                    position: _,
+                    position,
+                } => {
+                    self.cursor_x = position.x;
+                    self.cursor_y = position.y;
                 }
-                | WindowEvent::MouseInput {
+                WindowEvent::MouseInput {
                     device_id: _,
-                    state: _,
-                    button: _,
-                } => {}
+                    state,
+                    button,
+                } => match (state, button) {
+                    (ElementState::Pressed, MouseButton::Left) => {
+                        self.canvas_click();
+                    }
+                    _ => {}
+                },
                 _ => {
                     console_log!("unhandled window_event: {:?}", event);
                 }
@@ -89,7 +113,13 @@ impl App {
             .get_element_by_id("winit-container")
             .expect("winit-container element not found in the DOM");
 
-        let window_attributes = WindowAttributes::default();
+        let inner_size = {
+            let width = js_window.inner_width().unwrap().as_f64().unwrap() as u32;
+            let height = js_window.inner_height().unwrap().as_f64().unwrap() as u32;
+            winit::dpi::PhysicalSize::new(width, height)
+        };
+
+        let window_attributes = WindowAttributes::default().with_inner_size(inner_size);
         let window = event_loop
             .create_window(window_attributes)
             .expect("unable to create winit window");
@@ -123,6 +153,26 @@ impl App {
             ctx,
         });
         self.state.as_ref().unwrap().window.request_redraw();
+    }
+
+    fn canvas_click(&mut self) {
+        console_log!("clicked x: {}, y: {}", self.cursor_x, self.cursor_y);
+        // self.
+        // let width = self.canvas.width() as f64;
+        // let height = self.canvas.height() as f64;
+
+        // let x = event.offset_x() as f64;
+        // let y = event.offset_y() as f64;
+
+        // // TODO: implement click handling logic
+        // let world_position = world::screen_space_to_world_space(position, x, y, width, height);
+
+        // console_log!(
+        //     "canvas clicked at: ({}, {}), world: {:?}",
+        //     x,
+        //     y,
+        //     world_position
+        // );
     }
 }
 
