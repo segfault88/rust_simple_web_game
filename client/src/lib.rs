@@ -3,19 +3,18 @@ mod console;
 mod websocket;
 mod world;
 
-use anyhow::{Context, Result};
 use client::Client;
 use std::cell::RefCell;
 use std::rc::Rc;
 use wasm_bindgen::prelude::*;
-use web_sys::{CanvasRenderingContext2d, HtmlCanvasElement};
+use web_sys::CanvasRenderingContext2d;
 use websocket::WebSocketHandler;
 use winit::{
     application::ApplicationHandler,
     dpi::PhysicalPosition,
-    event::{ElementState, Event, MouseButton, WindowEvent},
+    event::{ElementState, MouseButton, WindowEvent},
     event_loop::{ActiveEventLoop, ControlFlow, EventLoop},
-    window::{Window, WindowAttributes, WindowId},
+    window::{WindowAttributes, WindowId},
 };
 
 #[cfg(target_arch = "wasm32")]
@@ -42,8 +41,8 @@ impl ApplicationHandler<()> for App {
 
     fn window_event(
         &mut self,
-        event_loop: &ActiveEventLoop,
-        window_id: WindowId,
+        _event_loop: &ActiveEventLoop,
+        _window_id: WindowId,
         event: WindowEvent,
     ) {
         if let Some(client) = &mut self.client {
@@ -71,12 +70,11 @@ impl ApplicationHandler<()> for App {
                     device_id: _,
                     state,
                     button,
-                } => match (state, button) {
-                    (ElementState::Pressed, MouseButton::Left) => {
+                } => {
+                    if let (ElementState::Pressed, MouseButton::Left) = (state, button) {
                         client.canvas_click(self.cursor);
                     }
-                    _ => {}
-                },
+                }
                 _ => {
                     // console_log!("unhandled window_event: {:?}", event);
                 }
@@ -116,7 +114,7 @@ impl App {
         let canvas = document
             .create_element("canvas")
             .unwrap()
-            .dyn_into::<HtmlCanvasElement>()
+            .dyn_into::<web_sys::HtmlCanvasElement>()
             .unwrap();
 
         container.append_child(&canvas).unwrap();

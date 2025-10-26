@@ -1,16 +1,13 @@
 use crate::{
     console_log,
     websocket::{ConnectionState, WebSocketHandler},
-    world::{self, screen_space_to_world_space, world_space_to_screen_space},
+    world::{screen_space_to_world_space, world_space_to_screen_space},
 };
-use anyhow::{Context, Result};
 use shared::{ClientToServerWsMessage, OtherPlayer, PlayerId, Position, ServerToClientWsMessage};
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::f64::consts::PI;
 use std::rc::Rc;
-use std::time::Duration;
-use wasm_bindgen::prelude::*;
 use web_sys::{CanvasRenderingContext2d, HtmlCanvasElement};
 use web_time::Instant;
 use winit::dpi::PhysicalPosition;
