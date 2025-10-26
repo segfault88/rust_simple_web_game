@@ -1,6 +1,6 @@
 use shared::Position;
 
-const WORLD_SCALE_FACTOR: f64 = 10.0;
+const WORLD_SCALE_FACTOR: f64 = 25.0;
 
 pub fn world_space_to_screen_space(
     player_position: &Position,

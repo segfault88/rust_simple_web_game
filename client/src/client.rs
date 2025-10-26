@@ -178,40 +178,160 @@ impl Client {
 
         let ctx = &self.ctx;
 
-        ctx.set_fill_style_str(render_colors::BACKGROUND);
+        ctx.set_fill_style_str(render_settings::BACKGROUND);
         ctx.fill_rect(0.0, 0.0, size.width as f64, size.height as f64);
-
-        ctx.set_fill_style_str(render_colors::FILL);
 
         if ConnectionState::Connected == ws_state
             && let Some(position) = &self.position
         {
+            // draw the background grid
+            ctx.set_fill_style_str(render_settings::FILL);
+
+            let draw_x_line = |line_at_x: f64| -> u64 {
+                ctx.begin_path();
+                ctx.move_to(line_at_x, 0.0);
+                ctx.line_to(line_at_x, height);
+                ctx.stroke();
+                0
+            };
+
+            let start_world_x = (position.x / render_settings::GRID_SIZE).floor();
+            let mut current_world_x = start_world_x;
+
+            loop {
+                let (current_x, _) = world_space_to_screen_space(
+                    position,
+                    &Position {
+                        x: current_world_x,
+                        y: 0.0,
+                    },
+                    width,
+                    height,
+                );
+
+                if current_x <= 0.0 {
+                    break;
+                }
+
+                draw_x_line(current_x);
+
+                current_world_x -= render_settings::GRID_SIZE;
+            }
+
+            current_world_x = start_world_x + render_settings::GRID_SIZE;
+
+            loop {
+                let (current_x, _) = world_space_to_screen_space(
+                    position,
+                    &Position {
+                        x: current_world_x,
+                        y: 0.0,
+                    },
+                    width,
+                    height,
+                );
+
+                if current_x >= width {
+                    break;
+                }
+
+                draw_x_line(current_x);
+
+                current_world_x += render_settings::GRID_SIZE;
+            }
+
+            let draw_y_line = |line_at_y: f64| -> u64 {
+                ctx.begin_path();
+                ctx.move_to(0.0, line_at_y);
+                ctx.line_to(width, line_at_y);
+                ctx.stroke();
+                0
+            };
+
+            let start_world_y = (position.y / render_settings::GRID_SIZE).floor();
+            let mut current_world_y = start_world_y;
+
+            loop {
+                let (_, current_y) = world_space_to_screen_space(
+                    position,
+                    &Position {
+                        x: 0.0,
+                        y: current_world_y,
+                    },
+                    width,
+                    height,
+                );
+
+                if current_y <= 0.0 {
+                    break;
+                }
+
+                draw_y_line(current_y);
+
+                current_world_y -= render_settings::GRID_SIZE;
+            }
+
+            current_world_y = start_world_y + render_settings::GRID_SIZE;
+
+            loop {
+                let (_, current_y) = world_space_to_screen_space(
+                    position,
+                    &Position {
+                        x: 0.0,
+                        y: current_world_y,
+                    },
+                    width,
+                    height,
+                );
+
+                if current_y >= height {
+                    break;
+                }
+
+                draw_y_line(current_y);
+
+                current_world_y += render_settings::GRID_SIZE;
+            }
+
             // draw the player circle
-            ctx.set_fill_style_str(render_colors::PLAYER);
+            ctx.set_fill_style_str(render_settings::PLAYER);
 
             ctx.begin_path();
-            ctx.arc(width / 2.0, height / 2.0, 20.0, 0.0, 2.0 * PI)
-                .unwrap();
+            ctx.arc(
+                width / 2.0,
+                height / 2.0,
+                render_settings::PLAYER_RADIUS,
+                0.0,
+                2.0 * PI,
+            )
+            .unwrap();
             ctx.fill();
             ctx.close_path();
 
             // draw other players
-            ctx.set_fill_style_str(render_colors::OTHER_PLAYER);
+            ctx.set_fill_style_str(render_settings::OTHER_PLAYER);
             for other_player in self.other_players.values() {
                 let (other_x, other_y) =
                     world_space_to_screen_space(position, &other_player.position, width, height);
 
                 ctx.begin_path();
-                ctx.arc(other_x, other_y, 20.0, 0.0, 2.0 * PI).unwrap();
+                ctx.arc(
+                    other_x,
+                    other_y,
+                    render_settings::PLAYER_RADIUS,
+                    0.0,
+                    2.0 * PI,
+                )
+                .unwrap();
                 ctx.fill();
                 ctx.close_path();
             }
 
-            ctx.set_fill_style_str(render_colors::FILL);
+            ctx.set_fill_style_str(render_settings::FILL);
         } else {
-            ctx.set_fill_style_str(render_colors::ERROR);
+            ctx.set_fill_style_str(render_settings::ERROR);
             ctx.fill_rect(0.0, 0.0, size.width.into(), size.height.into());
-            ctx.set_fill_style_str(render_colors::FILL);
+            ctx.set_fill_style_str(render_settings::FILL);
         }
 
         // draw text showing connection state and player info
@@ -229,10 +349,12 @@ impl Client {
     }
 }
 
-mod render_colors {
+mod render_settings {
     pub const BACKGROUND: &str = "#fff";
     pub const FILL: &str = "#333";
     pub const PLAYER: &str = "#333388";
     pub const OTHER_PLAYER: &str = "#883333";
     pub const ERROR: &str = "#ff6961";
+    pub const GRID_SIZE: f64 = 25.0;
+    pub const PLAYER_RADIUS: f64 = 25.0;
 }
