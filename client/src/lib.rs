@@ -1,25 +1,73 @@
 use wasm_bindgen::prelude::*;
+use web_sys::{CanvasRenderingContext2d, HtmlCanvasElement};
 use winit::{
     application::ApplicationHandler,
     event::{Event, WindowEvent},
-    event_loop::ActiveEventLoop,
-    event_loop::{ControlFlow, EventLoop},
-    window::WindowId,
+    event_loop::{ActiveEventLoop, ControlFlow, EventLoop},
+    window::{Window, WindowAttributes, WindowId},
 };
 
 #[cfg(target_arch = "wasm32")]
-use winit::platform::web::EventLoopExtWebSys;
+use winit::platform::web::{EventLoopExtWebSys, WindowExtWebSys};
 
 mod console;
 
-struct State {}
+struct State {
+    window: Window,
+    ctx: CanvasRenderingContext2d,
+}
 
 #[derive(Default)]
-struct App {}
+struct App {
+    state: Option<State>,
+}
 
 impl ApplicationHandler<()> for App {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
-        console_log!("resumed");
+        // only create canvas and setup once
+        if self.state.is_some() {
+            console_log!("app resumed: already setup, continuing");
+            return;
+        }
+
+        console_log!("app resumed: setting up window, canvas and ctx");
+
+        let js_window = web_sys::window().expect("no global `window` exists");
+        let document = js_window
+            .document()
+            .expect("should have a document on window");
+        let container = document
+            .get_element_by_id("winit-container")
+            .expect("winit-container element not found in the DOM");
+
+        let window_attributes = WindowAttributes::default();
+        let window = event_loop
+            .create_window(window_attributes)
+            .expect("unable to create winit window");
+
+        #[cfg(target_arch = "wasm32")]
+        let canvas = window
+            .canvas()
+            .expect("expected WindowExtWebSys to create canvas");
+        #[cfg(not(target_arch = "wasm32"))]
+        let canvas = document
+            .create_element("canvas")
+            .unwrap()
+            .dyn_into::<HtmlCanvasElement>()
+            .unwrap();
+
+        container.append_child(&canvas).unwrap();
+
+        let ctx = canvas
+            .get_context("2d")
+            .unwrap()
+            .unwrap()
+            .dyn_into::<CanvasRenderingContext2d>()
+            .unwrap();
+
+        // store window, ctx and request_redraw now
+        self.state = Some(State { window, ctx });
+        self.state.as_ref().unwrap().window.request_redraw();
     }
 
     /// Emitted when the OS sends an event to a winit window.
@@ -32,8 +80,6 @@ impl ApplicationHandler<()> for App {
         console_log!("window_event");
     }
 }
-
-// impl ApplicationHandler<()> for App {}
 
 #[wasm_bindgen(start)]
 pub fn main() {
