@@ -1,3 +1,4 @@
+use anyhow::{Context, Result};
 use wasm_bindgen::prelude::*;
 use web_sys::{CanvasRenderingContext2d, HtmlCanvasElement};
 use winit::{
@@ -14,6 +15,7 @@ mod console;
 
 struct State {
     window: Window,
+    canvas: HtmlCanvasElement,
     ctx: CanvasRenderingContext2d,
 }
 
@@ -32,6 +34,53 @@ impl ApplicationHandler<()> for App {
 
         console_log!("app resumed: setting up window, canvas and ctx");
 
+        self.setup_canvas(event_loop);
+    }
+
+    fn window_event(
+        &mut self,
+        event_loop: &ActiveEventLoop,
+        window_id: WindowId,
+        event: WindowEvent,
+    ) {
+        if let Some(state) = &self.state {
+            match event {
+                WindowEvent::RedrawRequested => {
+                    let size = state.window.inner_size();
+                    console_log!("inner_size size: {:?}", size);
+
+                    state
+                        .ctx
+                        .clear_rect(0.0, 0.0, size.width as f64, size.height as f64);
+                }
+                WindowEvent::Resized(size) => {
+                    state.canvas.set_width(size.width);
+                    state.canvas.set_height(size.height);
+                    state.window.request_redraw();
+                }
+                WindowEvent::CursorEntered { device_id: _ }
+                | WindowEvent::CursorLeft { device_id: _ }
+                | WindowEvent::CursorMoved {
+                    device_id: _,
+                    position: _,
+                }
+                | WindowEvent::MouseInput {
+                    device_id: _,
+                    state: _,
+                    button: _,
+                } => {}
+                _ => {
+                    console_log!("unhandled window_event: {:?}", event);
+                }
+            }
+        } else {
+            console_log!("window_event but no state, skipping");
+        }
+    }
+}
+
+impl App {
+    fn setup_canvas(&mut self, event_loop: &ActiveEventLoop) {
         let js_window = web_sys::window().expect("no global `window` exists");
         let document = js_window
             .document()
@@ -58,6 +107,8 @@ impl ApplicationHandler<()> for App {
 
         container.append_child(&canvas).unwrap();
 
+        canvas.focus().unwrap();
+
         let ctx = canvas
             .get_context("2d")
             .unwrap()
@@ -65,19 +116,13 @@ impl ApplicationHandler<()> for App {
             .dyn_into::<CanvasRenderingContext2d>()
             .unwrap();
 
-        // store window, ctx and request_redraw now
-        self.state = Some(State { window, ctx });
+        // store window, canvas, ctx and request_redraw now
+        self.state = Some(State {
+            window,
+            canvas,
+            ctx,
+        });
         self.state.as_ref().unwrap().window.request_redraw();
-    }
-
-    /// Emitted when the OS sends an event to a winit window.
-    fn window_event(
-        &mut self,
-        event_loop: &ActiveEventLoop,
-        window_id: WindowId,
-        event: WindowEvent,
-    ) {
-        console_log!("window_event");
     }
 }
 
@@ -100,6 +145,8 @@ pub fn main() {
     }
     #[cfg(not(target_arch = "wasm32"))]
     {
+        // not really implemented for native, but just leaving the stub and
+        // keeping rust-analyzer happy
         let mut app = App::default();
 
         event_loop.run_app(&mut app).unwrap();
