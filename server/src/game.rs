@@ -310,11 +310,6 @@ pub struct GameHandle {
 }
 
 impl GameHandle {
-    pub async fn player_count(&self) -> u16 {
-        let lock = self.state.read().await;
-        lock.players.len() as u16
-    }
-
     pub async fn add_player(&self, ws_sender: UnboundedSender<WsMessage>) -> PlayerId {
         let mut lock = self.state.write().await;
         let player_id = lock.next_player_id;

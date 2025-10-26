@@ -6,17 +6,19 @@ use axum::{
         ws::{WebSocket, WebSocketUpgrade},
     },
     response::IntoResponse,
-    routing::{any, get},
+    routing::any,
 };
 use axum_extra::TypedHeader;
 use game::WsMessage;
+use headers::HeaderValue;
+use http::header::{CACHE_CONTROL, EXPIRES, PRAGMA};
 use shared::{ClientToServerWsMessage, ServerToClientWsMessage};
 use std::net::SocketAddr;
 use std::path::PathBuf;
 use tokio::net::TcpListener;
 use tokio::sync::mpsc::unbounded_channel;
 use tokio_util::sync::CancellationToken;
-use tower_http::services::ServeDir;
+use tower_http::{services::ServeDir, set_header::SetResponseHeaderLayer};
 use tracing::{Level, error, info, warn};
 use tracing_subscriber::FmtSubscriber;
 
@@ -58,6 +60,24 @@ async fn main() {
 
     info!("set assets path: {:?}", client_assets_path);
 
+    let static_router = Router::new()
+        .fallback_service(ServeDir::new(client_assets_path))
+        // add headers to prevent any browser caching only for the static assets
+        .layer(SetResponseHeaderLayer::overriding(
+            CACHE_CONTROL,
+            "no-cache, no-store, must-revalidate"
+                .parse::<HeaderValue>()
+                .unwrap(),
+        ))
+        .layer(SetResponseHeaderLayer::overriding(
+            PRAGMA,
+            "no-cache".parse::<HeaderValue>().unwrap(),
+        ))
+        .layer(SetResponseHeaderLayer::overriding(
+            EXPIRES,
+            "0".parse::<HeaderValue>().unwrap(),
+        ));
+
     let app = Router::new()
         .route(
             "/ws",
@@ -66,17 +86,7 @@ async fn main() {
                 move |ws, user_agent, addr| ws_handler(ws, user_agent, addr, handle.clone())
             }),
         )
-        .route(
-            "/count",
-            get({
-                let handle = handle.clone();
-                move || async move {
-                    let count = handle.player_count().await;
-                    format!("count {}", count)
-                }
-            }),
-        )
-        .fallback_service(ServeDir::new(client_assets_path));
+        .fallback_service(static_router);
 
     let listener = TcpListener::bind(format!("0.0.0.0:{}", port))
         .await
