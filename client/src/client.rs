@@ -190,7 +190,7 @@ impl Client {
             ctx.set_fill_style_str(render_colors::PLAYER);
 
             ctx.begin_path();
-            ctx.arc(width / 2.0, height / 2.0, 10.0, 0.0, 2.0 * PI)
+            ctx.arc(width / 2.0, height / 2.0, 20.0, 0.0, 2.0 * PI)
                 .unwrap();
             ctx.fill();
             ctx.close_path();
@@ -202,7 +202,7 @@ impl Client {
                     world_space_to_screen_space(position, &other_player.position, width, height);
 
                 ctx.begin_path();
-                ctx.arc(other_x, other_y, 10.0, 0.0, 2.0 * PI).unwrap();
+                ctx.arc(other_x, other_y, 20.0, 0.0, 2.0 * PI).unwrap();
                 ctx.fill();
                 ctx.close_path();
             }
@@ -215,7 +215,7 @@ impl Client {
         }
 
         // draw text showing connection state and player info
-        ctx.set_font("15px sans-serif");
+        ctx.set_font("30px \"Inter\", sans-serif");
 
         let text = format!(
             "State: {:?} | Player Id: {:?} | Position: {:.2?}",
@@ -223,9 +223,9 @@ impl Client {
             self.player_id,
             self.position.unwrap_or_default()
         );
-        ctx.fill_text(text.as_str(), 20.0, 40.0).unwrap();
+        ctx.fill_text(text.as_str(), 50.0, 50.0).unwrap();
         let text = format!("Other players: {}", self.other_players.len());
-        ctx.fill_text(&text, 20.0, 60.0).unwrap();
+        ctx.fill_text(&text, 50.0, 100.0).unwrap();
     }
 }
 
