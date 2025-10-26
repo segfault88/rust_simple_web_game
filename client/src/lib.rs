@@ -78,7 +78,7 @@ impl ApplicationHandler<()> for App {
                     _ => {}
                 },
                 _ => {
-                    console_log!("unhandled window_event: {:?}", event);
+                    // console_log!("unhandled window_event: {:?}", event);
                 }
             }
         } else {
@@ -162,7 +162,8 @@ pub fn main() {
     console_error_panic_hook::set_once();
 
     let event_loop = EventLoop::builder().build().unwrap();
-    event_loop.set_control_flow(ControlFlow::Poll);
+
+    event_loop.set_control_flow(ControlFlow::Wait);
 
     #[cfg(target_arch = "wasm32")]
     {

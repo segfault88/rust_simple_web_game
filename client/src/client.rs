@@ -65,7 +65,7 @@ impl Client {
                 self.canvas.height().into(),
             );
 
-            console_log!("canvas_click: {:?}, to: {:?}", position, to);
+            console_log!("canvas_click: {:.2?}, to: {:.2?}", position, to);
 
             // Send move command to server
             self.moving_to = Some(to);
