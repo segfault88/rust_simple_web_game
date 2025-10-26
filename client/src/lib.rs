@@ -1,8 +1,17 @@
+mod client;
+mod console;
+mod world;
+
 use anyhow::{Context, Result};
+use client::Client;
+use shared::Position;
+use std::cell::RefCell;
+use std::rc::Rc;
 use wasm_bindgen::prelude::*;
 use web_sys::{CanvasRenderingContext2d, HtmlCanvasElement, WebSocket};
 use winit::{
     application::ApplicationHandler,
+    dpi::PhysicalPosition,
     event::{ElementState, Event, MouseButton, WindowEvent},
     event_loop::{ActiveEventLoop, ControlFlow, EventLoop},
     window::{Window, WindowAttributes, WindowId},
@@ -11,27 +20,16 @@ use winit::{
 #[cfg(target_arch = "wasm32")]
 use winit::platform::web::{EventLoopExtWebSys, WindowExtWebSys};
 
-mod console;
-mod world;
-
-struct State {
-    window: Window,
-    canvas: HtmlCanvasElement,
-    ctx: CanvasRenderingContext2d,
-}
-
 #[derive(Default)]
 struct App {
-    state: Option<State>,
-    cursor_x: f64,
-    cursor_y: f64,
-    frame_number: u64,
+    client: Option<Client>,
+    cursor: PhysicalPosition<f64>,
 }
 
 impl ApplicationHandler<()> for App {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         // only create canvas and setup once
-        if self.state.is_some() {
+        if self.client.is_some() {
             console_log!("app resumed: already setup, continuing");
             return;
         }
@@ -47,14 +45,12 @@ impl ApplicationHandler<()> for App {
         window_id: WindowId,
         event: WindowEvent,
     ) {
-        if let Some(state) = &self.state {
+        if let Some(client) = &mut self.client {
             match event {
                 WindowEvent::RedrawRequested => {
-                    self.frame_number += 1;
+                    let size = client.window.inner_size();
 
-                    let size = state.window.inner_size();
-
-                    let ctx = &state.ctx;
+                    let ctx = &client.ctx;
 
                     // set background to white
                     ctx.set_fill_style(&"white".into());
@@ -63,16 +59,16 @@ impl ApplicationHandler<()> for App {
                     // draw text
                     ctx.set_fill_style(&"black".into());
                     ctx.set_font("bold 32px Inter, sans-serif");
-                    let text = format!("WTF seems like we can {}", self.frame_number);
+                    let text = format!("WTF seems like we can <stuff>");
                     ctx.fill_text(text.as_str(), 50 as f64, 50 as f64).unwrap();
 
                     // we need to request a redraw to get a continuous loop
-                    state.window.request_redraw();
+                    client.window.request_redraw();
                 }
                 WindowEvent::Resized(size) => {
-                    state.canvas.set_width(size.width);
-                    state.canvas.set_height(size.height);
-                    state.window.request_redraw();
+                    client.canvas.set_width(size.width);
+                    client.canvas.set_height(size.height);
+                    client.window.request_redraw();
                 }
                 WindowEvent::CursorEntered { device_id: _ }
                 | WindowEvent::CursorLeft { device_id: _ } => {}
@@ -80,8 +76,7 @@ impl ApplicationHandler<()> for App {
                     device_id: _,
                     position,
                 } => {
-                    self.cursor_x = position.x;
-                    self.cursor_y = position.y;
+                    self.cursor = position;
                 }
                 WindowEvent::MouseInput {
                     device_id: _,
@@ -89,7 +84,7 @@ impl ApplicationHandler<()> for App {
                     button,
                 } => match (state, button) {
                     (ElementState::Pressed, MouseButton::Left) => {
-                        self.canvas_click();
+                        client.canvas_click(self.cursor);
                     }
                     _ => {}
                 },
@@ -146,33 +141,12 @@ impl App {
             .dyn_into::<CanvasRenderingContext2d>()
             .unwrap();
 
-        // store window, canvas, ctx and request_redraw now
-        self.state = Some(State {
-            window,
-            canvas,
-            ctx,
-        });
-        self.state.as_ref().unwrap().window.request_redraw();
-    }
-
-    fn canvas_click(&mut self) {
-        console_log!("clicked x: {}, y: {}", self.cursor_x, self.cursor_y);
-        // self.
-        // let width = self.canvas.width() as f64;
-        // let height = self.canvas.height() as f64;
-
-        // let x = event.offset_x() as f64;
-        // let y = event.offset_y() as f64;
-
-        // // TODO: implement click handling logic
-        // let world_position = world::screen_space_to_world_space(position, x, y, width, height);
-
-        // console_log!(
-        //     "canvas clicked at: ({}, {}), world: {:?}",
-        //     x,
-        //     y,
-        //     world_position
-        // );
+        // build client, save state
+        self.client = Some(Client::new(window, canvas, ctx));
+        // request draw now
+        if let Some(c) = &self.client {
+            c.request_redraw();
+        }
     }
 }
 
