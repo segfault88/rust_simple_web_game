@@ -33,3 +33,4 @@ web-sys = { version = "0.3", features = [
 anyhow = "1.0.100"
 winit = { version = "0.30", features = ["serde"] }
 console_error_panic_hook = "0.1.7"
+web-time = "1.1.0"

@@ -50,6 +50,7 @@ impl ApplicationHandler<()> for App {
             match event {
                 WindowEvent::RedrawRequested => {
                     client.process_messages();
+                    client.update();
                     client.render();
                     client.request_redraw();
                 }
